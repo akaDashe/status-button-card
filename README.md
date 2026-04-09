@@ -167,6 +167,6 @@ npm run format      # Prettier
 
 [hacs-badge]: https://img.shields.io/badge/HACS-Default-41BDF5.svg
 [hacs-url]: https://github.com/hacs/integration
-[build-badge]: https://img.shields.io/github/actions/workflow/status/akaDashe/dashe-status-button-card/build.yml?branch=main
-[build-url]: https://github.com/akaDashe/dashe-status-button-card/actions/workflows/build.yml
-[license-badge]: https://img.shields.io/github/license/akaDashe/dashe-status-button-card
+[build-badge]: https://img.shields.io/github/actions/workflow/status/akaDashe/status-button-card/build.yml?branch=main
+[build-url]: https://github.com/akaDashe/status-button-card/actions/workflows/build.yml
+[license-badge]: https://img.shields.io/github/license/akaDashe/status-button-card
