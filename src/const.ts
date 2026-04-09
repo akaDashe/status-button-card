@@ -1,6 +1,6 @@
 export const CARD_TAG = "dashe-status-button-card";
 export const EDITOR_TAG = "dashe-status-button-card-editor";
-export const CARD_VERSION = "1.0.0";
+export const CARD_VERSION = "1.0.0-beta.1";
 
 export const DOMAIN_ICONS: Record<string, string> = {
   light: "mdi:lightbulb",

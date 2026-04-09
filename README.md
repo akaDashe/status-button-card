@@ -4,6 +4,8 @@
 [![Build][build-badge]][build-url]
 [![License][license-badge]](LICENSE)
 
+> **Beta** — This card is in active development. Features and configuration may change before the 1.0.0 stable release.
+
 A customisable button card for [Home Assistant](https://www.home-assistant.io/) focused on entity status. State-based icons, colors, labels, and animations give you at-a-glance visibility of your devices.
 
 ## Features

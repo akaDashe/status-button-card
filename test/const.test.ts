@@ -22,7 +22,7 @@ describe("constants", () => {
   });
 
   it("has a semver version", () => {
-    expect(CARD_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(CARD_VERSION).toMatch(/^\d+\.\d+\.\d+(-[\w.]+)?$/);
   });
 });
 

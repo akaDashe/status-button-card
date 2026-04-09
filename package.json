@@ -1,6 +1,6 @@
 {
   "name": "dashe-status-button-card",
-  "version": "1.0.0",
+  "version": "1.0.0-beta.1",
   "private": true,
   "type": "module",
   "description": "A customisable button card for Home Assistant focused on entity status with state-based icons, colors, and labels",
