@@ -18,7 +18,7 @@ import {
   COLOR_BLUE,
   COLOR_GREY,
 } from "../src/const";
-import type { HassEntity, DasheStatusButtonCardConfig, StateAppearance } from "../src/types";
+import type { HassEntity, StatusButtonCardConfig, StateAppearance } from "../src/types";
 
 function makeEntity(entityId: string, state: string, attrs: Record<string, any> = {}): HassEntity {
   return {
@@ -30,11 +30,9 @@ function makeEntity(entityId: string, state: string, attrs: Record<string, any> 
   };
 }
 
-function makeConfig(
-  overrides: Partial<DasheStatusButtonCardConfig> = {},
-): DasheStatusButtonCardConfig {
+function makeConfig(overrides: Partial<StatusButtonCardConfig> = {}): StatusButtonCardConfig {
   return {
-    type: "custom:dashe-status-button-card",
+    type: "custom:status-button-card",
     entity: "lock.front_door",
     ...overrides,
   };
@@ -329,7 +327,7 @@ describe("validateConfig", () => {
   });
 
   it("throws for missing entity", () => {
-    expect(() => validateConfig({ type: "custom:dashe-status-button-card" })).toThrow(
+    expect(() => validateConfig({ type: "custom:status-button-card" })).toThrow(
       "Entity is required",
     );
   });

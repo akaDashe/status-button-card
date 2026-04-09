@@ -1,12 +1,7 @@
 import { LitElement, html, css, nothing } from "lit";
 import { property, state, customElement } from "lit/decorators.js";
 import { EDITOR_TAG, COLOR_OPTIONS } from "./const";
-import type {
-  DasheStatusButtonCardConfig,
-  HomeAssistant,
-  StateAppearance,
-  ActionConfig,
-} from "./types";
+import type { StatusButtonCardConfig, HomeAssistant, StateAppearance, ActionConfig } from "./types";
 
 const ACTION_TYPES = [
   { value: "more-info", label: "More info" },
@@ -58,9 +53,9 @@ const _loadPromise = (async () => {
 })();
 
 @customElement(EDITOR_TAG)
-export class DasheStatusButtonCardEditor extends LitElement {
+export class StatusButtonCardEditor extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
-  @state() private _config!: DasheStatusButtonCardConfig;
+  @state() private _config!: StatusButtonCardConfig;
   @state() private _expandedAppearance: number = -1;
   @state() private _ready = false;
 
@@ -196,7 +191,7 @@ export class DasheStatusButtonCardEditor extends LitElement {
     `;
   }
 
-  public setConfig(config: DasheStatusButtonCardConfig): void {
+  public setConfig(config: StatusButtonCardConfig): void {
     this._config = config;
   }
 

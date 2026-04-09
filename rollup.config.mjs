@@ -5,9 +5,9 @@ import terser from "@rollup/plugin-terser";
 const dev = process.env.ROLLUP_WATCH;
 
 export default {
-  input: "src/dashe-status-button-card.ts",
+  input: "src/status-button-card.ts",
   output: {
-    file: "dist/dashe-status-button-card.js",
+    file: "dist/status-button-card.js",
     format: "es",
     inlineDynamicImports: true,
   },

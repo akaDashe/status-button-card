@@ -11,20 +11,20 @@ import {
   getName,
   validateConfig,
 } from "./state";
-import type { DasheStatusButtonCardConfig, ActionConfig, HomeAssistant } from "./types";
+import type { StatusButtonCardConfig, ActionConfig, HomeAssistant } from "./types";
 
 import "./editor";
 
 console.info(
-  `%c DASHE-STATUS-BUTTON-CARD %c v${CARD_VERSION} `,
+  `%c STATUS-BUTTON-CARD %c v${CARD_VERSION} `,
   "color: white; background: #607d8b; font-weight: bold; padding: 2px 6px; border-radius: 4px 0 0 4px;",
   "color: #607d8b; background: white; font-weight: bold; padding: 2px 6px; border-radius: 0 4px 4px 0;",
 );
 
 @customElement(CARD_TAG)
-export class DasheStatusButtonCard extends LitElement {
+export class StatusButtonCard extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
-  @state() private _config!: DasheStatusButtonCardConfig;
+  @state() private _config!: StatusButtonCardConfig;
 
   private _dblClickTimer: ReturnType<typeof setTimeout> | null = null;
   private _holdTimer: ReturnType<typeof setTimeout> | null = null;
@@ -46,7 +46,7 @@ export class DasheStatusButtonCard extends LitElement {
     };
   }
 
-  public setConfig(config: DasheStatusButtonCardConfig): void {
+  public setConfig(config: StatusButtonCardConfig): void {
     validateConfig(config);
     this._config = config;
   }
@@ -232,7 +232,7 @@ export class DasheStatusButtonCard extends LitElement {
 (window as any).customCards = (window as any).customCards || [];
 (window as any).customCards.push({
   type: CARD_TAG,
-  name: "Dashe Status Button Card",
+  name: "Status Button Card by Dashe",
   description:
     "A customisable button card focused on entity status with state-based icons, colors, and labels",
   preview: true,

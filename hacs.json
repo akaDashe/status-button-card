@@ -1,6 +1,6 @@
 {
-  "name": "Dashe Status Button Card",
+  "name": "Status Button Card by Dashe",
   "render_readme": true,
-  "filename": "dashe-status-button-card.js",
+  "filename": "status-button-card.js",
   "homeassistant": "2024.1.0"
 }

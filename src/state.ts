@@ -8,7 +8,7 @@ import {
   COLOR_GREEN,
   COLOR_GREY,
 } from "./const";
-import type { DasheStatusButtonCardConfig, StateAppearance, HassEntity } from "./types";
+import type { StatusButtonCardConfig, StateAppearance, HassEntity } from "./types";
 
 export function getDomain(entityId: string): string {
   return entityId.split(".")[0];
@@ -51,7 +51,7 @@ export function findAppearance(
 }
 
 export function getColor(
-  config: DasheStatusButtonCardConfig,
+  config: StatusButtonCardConfig,
   entity: HassEntity,
   secondary?: HassEntity,
 ): string {
@@ -71,7 +71,7 @@ export function getColor(
 }
 
 export function getIcon(
-  config: DasheStatusButtonCardConfig,
+  config: StatusButtonCardConfig,
   entity: HassEntity,
   secondary?: HassEntity,
 ): string {
@@ -86,7 +86,7 @@ export function getIcon(
 }
 
 export function getLabel(
-  config: DasheStatusButtonCardConfig,
+  config: StatusButtonCardConfig,
   entity: HassEntity,
   secondary?: HassEntity,
 ): string {
@@ -97,7 +97,7 @@ export function getLabel(
 }
 
 export function shouldAnimate(
-  config: DasheStatusButtonCardConfig,
+  config: StatusButtonCardConfig,
   entity: HassEntity,
   secondary?: HassEntity,
 ): boolean {
@@ -109,7 +109,7 @@ export function shouldAnimate(
   return transitional?.includes(entity.state) || false;
 }
 
-export function getName(config: DasheStatusButtonCardConfig, entity: HassEntity): string {
+export function getName(config: StatusButtonCardConfig, entity: HassEntity): string {
   if (config.name !== undefined) return config.name;
   return entity.attributes.friendly_name || "Button";
 }

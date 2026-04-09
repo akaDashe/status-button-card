@@ -14,11 +14,11 @@ import {
 
 describe("constants", () => {
   it("has correct card tag", () => {
-    expect(CARD_TAG).toBe("dashe-status-button-card");
+    expect(CARD_TAG).toBe("status-button-card");
   });
 
   it("has correct editor tag", () => {
-    expect(EDITOR_TAG).toBe("dashe-status-button-card-editor");
+    expect(EDITOR_TAG).toBe("status-button-card-editor");
   });
 
   it("has a semver version", () => {

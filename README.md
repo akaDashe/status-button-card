@@ -1,4 +1,4 @@
-# Dashe Status Button Card
+# Status Button Card by Dashe
 
 [![HACS][hacs-badge]][hacs-url]
 [![Build][build-badge]][build-url]
@@ -25,16 +25,16 @@ A customisable button card for [Home Assistant](https://www.home-assistant.io/) 
 
 1. Open HACS in your Home Assistant instance
 2. Go to **Frontend** > **+ Explore & Download Repositories**
-3. Search for **Dashe Status Button Card**
+3. Search for **Status Button Card by Dashe**
 4. Click **Download**
 5. Restart Home Assistant
 
 ### Manual
 
-1. Download `dashe-status-button-card.js` from the [latest release](../../releases/latest)
-2. Copy it to `config/www/dashe-status-button-card/`
+1. Download `status-button-card.js` from the [latest release](../../releases/latest)
+2. Copy it to `config/www/status-button-card/`
 3. Add the resource in **Settings > Dashboards > Resources**:
-   - URL: `/local/dashe-status-button-card/dashe-status-button-card.js`
+   - URL: `/local/status-button-card/status-button-card.js`
    - Type: JavaScript Module
 
 ## Usage
@@ -46,14 +46,14 @@ Add the card via the UI editor — all options are configurable through the visu
 ### YAML
 
 ```yaml
-type: custom:dashe-status-button-card
+type: custom:status-button-card
 entity: lock.front_door
 ```
 
 ### Full Example
 
 ```yaml
-type: custom:dashe-status-button-card
+type: custom:status-button-card
 entity: lock.front_door
 secondary_entity: binary_sensor.front_door_contact
 name: Front Door
@@ -93,13 +93,13 @@ Use inside a `horizontal-stack` for a status bar:
 ```yaml
 type: horizontal-stack
 cards:
-  - type: custom:dashe-status-button-card
+  - type: custom:status-button-card
     entity: lock.front_door
-  - type: custom:dashe-status-button-card
+  - type: custom:status-button-card
     entity: light.living_room
-  - type: custom:dashe-status-button-card
+  - type: custom:status-button-card
     entity: alarm_control_panel.home
-  - type: custom:dashe-status-button-card
+  - type: custom:status-button-card
     entity: cover.blinds
 ```
 

@@ -16,7 +16,7 @@ export interface StateAppearance {
   animate?: boolean;
 }
 
-export interface DasheStatusButtonCardConfig {
+export interface StatusButtonCardConfig {
   type: string;
   entity: string;
   name?: string;
