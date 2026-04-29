@@ -1,7 +1,13 @@
 import { LitElement, html, css, nothing } from "lit";
 import { property, state, customElement } from "lit/decorators.js";
 import { EDITOR_TAG, COLOR_OPTIONS } from "./const";
-import type { StatusButtonCardConfig, HomeAssistant, StateAppearance, ActionConfig } from "./types";
+import type {
+  StatusButtonCardConfig,
+  HomeAssistant,
+  StateAppearance,
+  ActionConfig,
+  CameraConfig,
+} from "./types";
 
 const ACTION_TYPES = [
   { value: "more-info", label: "More info" },
@@ -20,7 +26,6 @@ const mdiPalette =
   "M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z";
 const mdiListBox =
   "M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M7,7H9V9H7V7M7,11H9V13H7V11M7,15H9V17H7V15M17,17H11V15H17V17M17,13H11V11H17V13M17,9H11V7H17V9Z";
-const mdiArrowExpandVertical = "M13,9V15H16L12,19L8,15H11V9H8L12,5L16,9H13Z";
 const mdiGestureTap =
   "M10,9A1,1 0 0,1 11,8A1,1 0 0,1 12,9V13.47L13.21,13.6L18.15,15.79C18.68,16.03 19,16.56 19,17.14V21.5C18.97,22.32 18.32,22.97 17.5,23H11C10.62,23 10.26,22.85 10,22.57L5.1,18.37L5.84,17.6C6.03,17.39 6.3,17.28 6.58,17.28H6.8L10,19V9M11,5A4,4 0 0,1 15,9C15,10.5 14.2,11.77 13,12.46V11.24C13.61,10.69 14,9.89 14,9A3,3 0 0,0 11,6A3,3 0 0,0 8,9C8,9.89 8.39,10.69 9,11.24V12.46C7.8,11.77 7,10.5 7,9A4,4 0 0,1 11,5Z";
 
@@ -188,6 +193,59 @@ export class StatusButtonCardEditor extends LitElement {
         margin: 0;
         padding-top: 4px;
       }
+
+      .select-row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 14px;
+        flex: 1;
+      }
+
+      .select-row > span {
+        font-size: 12px;
+        color: var(--secondary-text-color);
+        padding-left: 4px;
+      }
+
+      .select-row > select {
+        appearance: none;
+        background-color: var(
+          --mdc-text-field-fill-color,
+          rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.05)
+        );
+        color: var(--primary-text-color, inherit);
+        border: none;
+        border-bottom: 1px solid var(--mdc-text-field-idle-line-color, rgba(0, 0, 0, 0.42));
+        border-radius: 4px 4px 0 0;
+        padding: 14px 32px 14px 12px;
+        font: inherit;
+        font-size: 14px;
+        line-height: 1.15;
+        width: 100%;
+        cursor: pointer;
+        transition: border-bottom-color 150ms ease;
+        background-image:
+          linear-gradient(45deg, transparent 50%, currentColor 50%),
+          linear-gradient(135deg, currentColor 50%, transparent 50%);
+        background-position:
+          calc(100% - 16px) 50%,
+          calc(100% - 11px) 50%;
+        background-size:
+          5px 5px,
+          5px 5px;
+        background-repeat: no-repeat;
+      }
+
+      .select-row > select:hover {
+        border-bottom-color: var(--primary-text-color);
+      }
+
+      .select-row > select:focus {
+        outline: none;
+        border-bottom: 2px solid var(--primary-color, #03a9f4);
+        padding-bottom: 13px;
+      }
     `;
   }
 
@@ -228,6 +286,54 @@ export class StatusButtonCardEditor extends LitElement {
     this._expandedAppearance = list.length - 1;
   }
 
+  private _normalizedAppearanceCameras(app: StateAppearance): CameraConfig[] {
+    const list = app.cameras || [];
+    return list.map((c) => (typeof c === "string" ? { entity: c } : { ...c }));
+  }
+
+  private _writeAppearanceCameras(appIndex: number, list: CameraConfig[]): void {
+    // Allow blank intermediate entries while editing — runtime normalizeCameras
+    // filters them out at render time so an unfinished entry is harmless.
+    this._updateAppearance(appIndex, { cameras: list.length ? list : undefined });
+  }
+
+  private _addAppearanceCamera(appIndex: number): void {
+    const app = this._config.state_appearances?.[appIndex];
+    if (!app) return;
+    this._writeAppearanceCameras(appIndex, [
+      ...this._normalizedAppearanceCameras(app),
+      { entity: "" },
+    ]);
+  }
+
+  private _updateAppearanceCamera(
+    appIndex: number,
+    camIndex: number,
+    update: Partial<CameraConfig>,
+  ): void {
+    const app = this._config.state_appearances?.[appIndex];
+    if (!app) return;
+    const list = this._normalizedAppearanceCameras(app);
+    list[camIndex] = { ...list[camIndex], ...update };
+    if (update.aspect_ratio === undefined && "aspect_ratio" in update) {
+      delete list[camIndex].aspect_ratio;
+    }
+    if (update.object_position === undefined && "object_position" in update) {
+      delete list[camIndex].object_position;
+    }
+    if (update.object_fit === undefined && "object_fit" in update) {
+      delete list[camIndex].object_fit;
+    }
+    this._writeAppearanceCameras(appIndex, list);
+  }
+
+  private _removeAppearanceCamera(appIndex: number, camIndex: number): void {
+    const app = this._config.state_appearances?.[appIndex];
+    if (!app) return;
+    const list = this._normalizedAppearanceCameras(app).filter((_, i) => i !== camIndex);
+    this._writeAppearanceCameras(appIndex, list);
+  }
+
   private _renderActionEditor(
     key: "tap_action" | "double_tap_action" | "hold_action",
     label: string,
@@ -237,19 +343,18 @@ export class StatusButtonCardEditor extends LitElement {
     };
 
     return html`
-      <ha-select
-        .label=${label}
-        .value=${action.action}
-        fixedMenuPosition
-        naturalMenuWidth
-        @selected=${(e: CustomEvent) => {
-          const val = (e.target as any).value;
-          if (val) this._set(key, { action: val });
-        }}
-        @closed=${(e: Event) => e.stopPropagation()}
-      >
-        ${ACTION_TYPES.map((t) => html`<ha-list-item .value=${t.value}>${t.label}</ha-list-item>`)}
-      </ha-select>
+      <label class="select-row">
+        <span>${label}</span>
+        <select
+          .value=${action.action}
+          @change=${(e: Event) => {
+            const val = (e.target as HTMLSelectElement).value;
+            if (val) this._set(key, { action: val });
+          }}
+        >
+          ${ACTION_TYPES.map((t) => html`<option value=${t.value}>${t.label}</option>`)}
+        </select>
+      </label>
       ${action.action === "navigate"
         ? html`<ha-textfield
             .label=${"Navigation path"}
@@ -354,23 +459,20 @@ export class StatusButtonCardEditor extends LitElement {
                     })}
                 ></ha-textfield>
 
-                <ha-select
-                  .label=${"Color for this state"}
-                  .value=${app.color || ""}
-                  fixedMenuPosition
-                  naturalMenuWidth
-                  @selected=${(e: CustomEvent) => {
-                    const val = (e.target as any).value;
-                    this._updateAppearance(index, {
-                      color: val || undefined,
-                    });
-                  }}
-                  @closed=${(e: Event) => e.stopPropagation()}
-                >
-                  ${COLOR_OPTIONS.map(
-                    (c) => html`<ha-list-item .value=${c.value}>${c.label}</ha-list-item>`,
-                  )}
-                </ha-select>
+                <label class="select-row">
+                  <span>Color for this state</span>
+                  <select
+                    .value=${app.color || ""}
+                    @change=${(e: Event) => {
+                      const val = (e.target as HTMLSelectElement).value;
+                      this._updateAppearance(index, {
+                        color: val || undefined,
+                      });
+                    }}
+                  >
+                    ${COLOR_OPTIONS.map((c) => html`<option value=${c.value}>${c.label}</option>`)}
+                  </select>
+                </label>
 
                 <ha-formfield .label=${"Blink animation"}>
                   <ha-switch
@@ -381,9 +483,102 @@ export class StatusButtonCardEditor extends LitElement {
                       })}
                   ></ha-switch>
                 </ha-formfield>
+
+                <p class="hint" style="margin-top: 12px; font-weight: 500">
+                  Cameras revealed by this state
+                </p>
+                <p class="hint">
+                  Cameras slide down when this state is active. Leave empty to reveal nothing.
+                </p>
+                ${this._normalizedAppearanceCameras(app).map((cam, camIndex) =>
+                  this._renderAppearanceCameraItem(index, cam, camIndex),
+                )}
+                <ha-button @click=${() => this._addAppearanceCamera(index)}>Add camera</ha-button>
               </div>
             `
           : nothing}
+      </div>
+    `;
+  }
+
+  private _renderAppearanceCameraItem(appIndex: number, cam: CameraConfig, camIndex: number) {
+    return html`
+      <div
+        class="appearance-item"
+        style="background: var(--secondary-background-color, transparent)"
+      >
+        <div class="appearance-options">
+          <ha-entity-picker
+            .hass=${this.hass}
+            .value=${cam.entity || ""}
+            .label=${"Camera entity"}
+            .includeDomains=${["camera"]}
+            allow-custom-entity
+            @value-changed=${(e: CustomEvent) => {
+              e.stopPropagation();
+              this._updateAppearanceCamera(appIndex, camIndex, {
+                entity: e.detail.value || "",
+              });
+            }}
+          ></ha-entity-picker>
+
+          <ha-textfield
+            .label=${"Aspect ratio (optional, e.g. 16/9, 9/16, 4/3)"}
+            .value=${cam.aspect_ratio || ""}
+            placeholder="16 / 9"
+            @input=${(e: any) =>
+              this._updateAppearanceCamera(appIndex, camIndex, {
+                aspect_ratio: e.target.value || undefined,
+              })}
+          ></ha-textfield>
+          <p class="hint">Frame aspect ratio. Defaults to 16/9 across all cameras.</p>
+
+          <label class="select-row">
+            <span>Video fit</span>
+            <select
+              .value=${cam.object_fit || "cover"}
+              @change=${(e: Event) => {
+                const val = (e.target as HTMLSelectElement).value as "contain" | "cover";
+                this._updateAppearanceCamera(appIndex, camIndex, {
+                  object_fit: val === "cover" ? undefined : val,
+                });
+              }}
+            >
+              <option value="cover">Cover (crop to fill, default)</option>
+              <option value="contain">Contain (letterbox, no crop)</option>
+            </select>
+          </label>
+
+          <label class="select-row">
+            <span>Video position within frame</span>
+            <select
+              .value=${cam.object_position || "center"}
+              @change=${(e: Event) => {
+                const val = (e.target as HTMLSelectElement).value;
+                this._updateAppearanceCamera(appIndex, camIndex, {
+                  object_position: val === "center" ? undefined : val,
+                });
+              }}
+            >
+              <option value="center">Center (default)</option>
+              <option value="top">Top</option>
+              <option value="bottom">Bottom</option>
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+            </select>
+          </label>
+          <p class="hint">
+            Pair "Cover" with "Bottom" to keep the lower part of the video visible while cropping
+            the top.
+          </p>
+          <p class="hint">
+            Where the video sits inside the frame when its aspect doesn't match the frame's.
+          </p>
+
+          <ha-button @click=${() => this._removeAppearanceCamera(appIndex, camIndex)}>
+            Remove camera
+          </ha-button>
+        </div>
       </div>
     `;
   }
@@ -459,51 +654,42 @@ export class StatusButtonCardEditor extends LitElement {
           </ha-formfield>
 
           <div class="triple">
-            <ha-select
-              .label=${"Active"}
-              .value=${this._config.active_color || ""}
-              fixedMenuPosition
-              naturalMenuWidth
-              @selected=${(e: CustomEvent) => {
-                const val = (e.target as any).value;
-                this._set("active_color", val || undefined);
-              }}
-              @closed=${(e: Event) => e.stopPropagation()}
-            >
-              ${COLOR_OPTIONS.map(
-                (c) => html`<ha-list-item .value=${c.value}>${c.label}</ha-list-item>`,
-              )}
-            </ha-select>
-            <ha-select
-              .label=${"Inactive"}
-              .value=${this._config.inactive_color || ""}
-              fixedMenuPosition
-              naturalMenuWidth
-              @selected=${(e: CustomEvent) => {
-                const val = (e.target as any).value;
-                this._set("inactive_color", val || undefined);
-              }}
-              @closed=${(e: Event) => e.stopPropagation()}
-            >
-              ${COLOR_OPTIONS.map(
-                (c) => html`<ha-list-item .value=${c.value}>${c.label}</ha-list-item>`,
-              )}
-            </ha-select>
-            <ha-select
-              .label=${"Transitional"}
-              .value=${this._config.transitional_color || ""}
-              fixedMenuPosition
-              naturalMenuWidth
-              @selected=${(e: CustomEvent) => {
-                const val = (e.target as any).value;
-                this._set("transitional_color", val || undefined);
-              }}
-              @closed=${(e: Event) => e.stopPropagation()}
-            >
-              ${COLOR_OPTIONS.map(
-                (c) => html`<ha-list-item .value=${c.value}>${c.label}</ha-list-item>`,
-              )}
-            </ha-select>
+            <label class="select-row">
+              <span>Active</span>
+              <select
+                .value=${this._config.active_color || ""}
+                @change=${(e: Event) => {
+                  const val = (e.target as HTMLSelectElement).value;
+                  this._set("active_color", val || undefined);
+                }}
+              >
+                ${COLOR_OPTIONS.map((c) => html`<option value=${c.value}>${c.label}</option>`)}
+              </select>
+            </label>
+            <label class="select-row">
+              <span>Inactive</span>
+              <select
+                .value=${this._config.inactive_color || ""}
+                @change=${(e: Event) => {
+                  const val = (e.target as HTMLSelectElement).value;
+                  this._set("inactive_color", val || undefined);
+                }}
+              >
+                ${COLOR_OPTIONS.map((c) => html`<option value=${c.value}>${c.label}</option>`)}
+              </select>
+            </label>
+            <label class="select-row">
+              <span>Transitional</span>
+              <select
+                .value=${this._config.transitional_color || ""}
+                @change=${(e: Event) => {
+                  const val = (e.target as HTMLSelectElement).value;
+                  this._set("transitional_color", val || undefined);
+                }}
+              >
+                ${COLOR_OPTIONS.map((c) => html`<option value=${c.value}>${c.label}</option>`)}
+              </select>
+            </label>
           </div>
         </div>
       </ha-expansion-panel>
@@ -515,42 +701,6 @@ export class StatusButtonCardEditor extends LitElement {
         <div class="content">
           ${appearances.map((app, index) => this._renderAppearanceItem(app, index))}
           <ha-button @click=${this._addAppearance}> Add state override </ha-button>
-        </div>
-      </ha-expansion-panel>
-
-      <!-- Sizing -->
-      <ha-expansion-panel outlined>
-        <ha-svg-icon slot="leading-icon" .path=${mdiArrowExpandVertical}></ha-svg-icon>
-        <h3 slot="header">Sizing</h3>
-        <div class="content">
-          <div class="side-by-side">
-            <ha-textfield
-              .label=${"Min width"}
-              .value=${this._config.min_width || ""}
-              placeholder="68px"
-              @input=${(e: any) => this._set("min_width", e.target.value || undefined)}
-            ></ha-textfield>
-            <ha-textfield
-              .label=${"Max width"}
-              .value=${this._config.max_width || ""}
-              placeholder="85px"
-              @input=${(e: any) => this._set("max_width", e.target.value || undefined)}
-            ></ha-textfield>
-          </div>
-          <div class="side-by-side">
-            <ha-textfield
-              .label=${"Height"}
-              .value=${this._config.height || ""}
-              placeholder="68px"
-              @input=${(e: any) => this._set("height", e.target.value || undefined)}
-            ></ha-textfield>
-            <ha-textfield
-              .label=${"Icon size"}
-              .value=${this._config.icon_size || ""}
-              placeholder="32px"
-              @input=${(e: any) => this._set("icon_size", e.target.value || undefined)}
-            ></ha-textfield>
-          </div>
         </div>
       </ha-expansion-panel>
 

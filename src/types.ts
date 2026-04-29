@@ -8,12 +8,20 @@ export interface ActionConfig {
   target?: { entity_id: string | string[] };
 }
 
+export interface CameraConfig {
+  entity: string;
+  aspect_ratio?: string;
+  object_position?: string;
+  object_fit?: "contain" | "cover";
+}
+
 export interface StateAppearance {
   state: string;
   icon?: string;
   label?: string;
   color?: string;
   animate?: boolean;
+  cameras?: (string | CameraConfig)[];
 }
 
 export interface StatusButtonCardConfig {
@@ -35,6 +43,9 @@ export interface StatusButtonCardConfig {
   tap_action?: ActionConfig;
   double_tap_action?: ActionConfig;
   hold_action?: ActionConfig;
+  camera_width?: string;
+  camera_aspect_ratio?: string;
+  camera_reveal_align?: "left" | "center" | "right";
 }
 
 export interface EntityRegistryEntry {

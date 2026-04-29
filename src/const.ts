@@ -1,6 +1,6 @@
 export const CARD_TAG = "status-button-card";
 export const EDITOR_TAG = "status-button-card-editor";
-export const CARD_VERSION = "1.0.0-beta.1";
+export const CARD_VERSION = "1.0.0-beta.2";
 
 export const DOMAIN_ICONS: Record<string, string> = {
   light: "mdi:lightbulb",
