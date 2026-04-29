@@ -8,7 +8,7 @@ import {
   COLOR_GREEN,
   COLOR_GREY,
 } from "./const";
-import type { StatusButtonCardConfig, StateAppearance, HassEntity } from "./types";
+import type { StatusButtonCardConfig, StateAppearance, HassEntity, CameraConfig } from "./types";
 
 export function getDomain(entityId: string): string {
   return entityId.split(".")[0];
@@ -112,6 +112,22 @@ export function shouldAnimate(
 export function getName(config: StatusButtonCardConfig, entity: HassEntity): string {
   if (config.name !== undefined) return config.name;
   return entity.attributes.friendly_name || "Button";
+}
+
+export function normalizeCameras(cameras: (string | CameraConfig)[] | undefined): CameraConfig[] {
+  if (!cameras?.length) return [];
+  return cameras
+    .map((c) => (typeof c === "string" ? { entity: c } : { ...c }))
+    .filter((c) => !!c.entity);
+}
+
+export function getCamerasForState(
+  config: StatusButtonCardConfig,
+  entity: HassEntity,
+  secondary?: HassEntity,
+): CameraConfig[] {
+  const match = findAppearance(config.state_appearances, entity.state, secondary?.state);
+  return normalizeCameras(match?.cameras);
 }
 
 export function validateConfig(config: any): void {

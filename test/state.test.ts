@@ -9,6 +9,8 @@ import {
   shouldAnimate,
   getName,
   validateConfig,
+  normalizeCameras,
+  getCamerasForState,
 } from "../src/state";
 import {
   COLOR_GREEN,
@@ -338,5 +340,134 @@ describe("validateConfig", () => {
 
   it("passes for valid config", () => {
     expect(() => validateConfig({ entity: "lock.front_door" })).not.toThrow();
+  });
+});
+
+// --- normalizeCameras ---
+describe("normalizeCameras", () => {
+  it("returns empty array for undefined or empty input", () => {
+    expect(normalizeCameras(undefined)).toEqual([]);
+    expect(normalizeCameras([])).toEqual([]);
+  });
+
+  it("converts string entries to objects", () => {
+    expect(normalizeCameras(["camera.front", "camera.back"])).toEqual([
+      { entity: "camera.front" },
+      { entity: "camera.back" },
+    ]);
+  });
+
+  it("preserves object entries with aspect_ratio", () => {
+    expect(normalizeCameras([{ entity: "camera.front", aspect_ratio: "16 / 9" }])).toEqual([
+      { entity: "camera.front", aspect_ratio: "16 / 9" },
+    ]);
+  });
+
+  it("mixes strings and objects", () => {
+    expect(
+      normalizeCameras(["camera.front", { entity: "camera.back", aspect_ratio: "9 / 16" }]),
+    ).toEqual([{ entity: "camera.front" }, { entity: "camera.back", aspect_ratio: "9 / 16" }]);
+  });
+
+  it("filters out entries without entity", () => {
+    expect(normalizeCameras([{ entity: "" }, { entity: "camera.ok" }])).toEqual([
+      { entity: "camera.ok" },
+    ]);
+  });
+
+  it("preserves object_position and object_fit", () => {
+    expect(
+      normalizeCameras([
+        {
+          entity: "camera.doorbell",
+          aspect_ratio: "16 / 9",
+          object_position: "bottom",
+          object_fit: "cover",
+        },
+      ]),
+    ).toEqual([
+      {
+        entity: "camera.doorbell",
+        aspect_ratio: "16 / 9",
+        object_position: "bottom",
+        object_fit: "cover",
+      },
+    ]);
+  });
+
+  it("does not retain a control field that was passed in (deprecated)", () => {
+    // control was removed in 1.0.0-beta.2; if a legacy YAML still includes it
+    // we just pass it through normalization (runtime ignores it). We only
+    // care that aspect_ratio + position + fit fields work as expected.
+    const result = normalizeCameras([
+      { entity: "camera.x", object_fit: "cover", object_position: "top" },
+    ]);
+    expect(result[0].entity).toBe("camera.x");
+    expect(result[0].object_fit).toBe("cover");
+    expect(result[0].object_position).toBe("top");
+  });
+});
+
+// --- getCamerasForState ---
+describe("getCamerasForState", () => {
+  it("returns empty when no state_appearances", () => {
+    const config = makeConfig({ entity: "alarm_control_panel.home" });
+    const entity = makeEntity("alarm_control_panel.home", "armed_home");
+    expect(getCamerasForState(config, entity)).toEqual([]);
+  });
+
+  it("returns empty when matching appearance has no cameras", () => {
+    const config = makeConfig({
+      entity: "alarm_control_panel.home",
+      state_appearances: [{ state: "armed_home", icon: "mdi:shield" }],
+    });
+    const entity = makeEntity("alarm_control_panel.home", "armed_home");
+    expect(getCamerasForState(config, entity)).toEqual([]);
+  });
+
+  it("returns normalized cameras from matching appearance", () => {
+    const config = makeConfig({
+      entity: "alarm_control_panel.home",
+      state_appearances: [
+        {
+          state: "armed_home",
+          cameras: ["camera.front", { entity: "camera.back", aspect_ratio: "9 / 16" }],
+        },
+      ],
+    });
+    const entity = makeEntity("alarm_control_panel.home", "armed_home");
+    expect(getCamerasForState(config, entity)).toEqual([
+      { entity: "camera.front" },
+      { entity: "camera.back", aspect_ratio: "9 / 16" },
+    ]);
+  });
+
+  it("returns empty when current state does not match any appearance", () => {
+    const config = makeConfig({
+      entity: "alarm_control_panel.home",
+      state_appearances: [
+        {
+          state: "armed_home",
+          cameras: ["camera.front"],
+        },
+      ],
+    });
+    const entity = makeEntity("alarm_control_panel.home", "disarmed");
+    expect(getCamerasForState(config, entity)).toEqual([]);
+  });
+
+  it("returns cameras from secondary state match", () => {
+    const config = makeConfig({
+      entity: "lock.door",
+      state_appearances: [
+        {
+          state: "secondary:on",
+          cameras: ["camera.porch"],
+        },
+      ],
+    });
+    const entity = makeEntity("lock.door", "locked");
+    const secondary = makeEntity("binary_sensor.motion", "on");
+    expect(getCamerasForState(config, entity, secondary)).toEqual([{ entity: "camera.porch" }]);
   });
 });

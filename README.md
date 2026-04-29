@@ -16,8 +16,8 @@ A customisable button card for [Home Assistant](https://www.home-assistant.io/) 
 - Secondary entity support (e.g. door sensor paired with a lock)
 - Custom state appearance overrides
 - Configurable tap, double-tap, and hold actions
-- Full visual editor matching native Home Assistant UI
-- Adjustable sizing (width, height, icon size)
+- **Camera reveal** — slide cameras down from the button when a configured state is active, with sync slide animation, configurable aspect ratio, fit mode (cover/contain), and position per camera
+- Visual editor with native HTML controls that integrate cleanly with Home Assistant theming
 
 ## Installation
 
@@ -41,7 +41,7 @@ A customisable button card for [Home Assistant](https://www.home-assistant.io/) 
 
 ### Visual Editor
 
-Add the card via the UI editor — all options are configurable through the visual editor with collapsible sections for Entity, Appearance, State Overrides, Sizing, and Actions.
+Add the card via the UI editor — all options are configurable through the visual editor with collapsible sections for Entity, Appearance, State Overrides, and Actions.
 
 ### YAML
 
@@ -116,14 +116,14 @@ cards:
 | `active_color` | string | Domain default | Color when entity is active |
 | `inactive_color` | string | Domain default | Color when entity is inactive |
 | `transitional_color` | string | Domain default | Color during transitional states |
-| `state_appearances` | list | | Per-state icon/label/color overrides |
-| `min_width` | string | `68px` | Minimum button width |
-| `max_width` | string | `85px` | Maximum button width |
-| `height` | string | `68px` | Button height |
-| `icon_size` | string | `26px` | Icon size |
+| `state_appearances` | list | | Per-state icon/label/color/cameras overrides |
 | `tap_action` | object | `more-info` | Action on tap |
 | `double_tap_action` | object | `none` | Action on double tap |
 | `hold_action` | object | `none` | Action on hold |
+| `min_width` | string | `68px` | Minimum button width (YAML only) |
+| `max_width` | string | `none` | Maximum button width (YAML only) |
+| `height` | string | `68px` | Button height (YAML only) |
+| `icon_size` | string | `26px` | Icon size (YAML only) |
 
 ### State Appearance Options
 
@@ -134,6 +134,41 @@ cards:
 | `label` | string | Label override for this state |
 | `color` | string | Color override for this state |
 | `animate` | boolean | Enable blink animation for this state |
+| `cameras` | list | Cameras to reveal when this state is active (see Camera Reveal) |
+
+### Camera Reveal
+
+When a state appearance has a non-empty `cameras` list, that list of cameras slides down underneath the button while the state is active. The reveal slides back up automatically when the state changes. A small triangular pointer in the active state's color anchors the reveal to the button that triggered it.
+
+Each camera entry can be a string (just the entity ID) or an object with extra options:
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `entity` | string | **Required** | Camera entity ID. Use a streaming-capable entity (e.g. from HA's native Ring integration) for live video — `ha-camera-stream` is rendered automatically when the entity supports streaming |
+| `aspect_ratio` | string | `16 / 9` | Frame aspect ratio for this camera (e.g. `16 / 9`, `9 / 16`, `4 / 3`) |
+| `object_fit` | `cover` \| `contain` | `cover` | `cover` crops the video to fill the frame, `contain` letterboxes it |
+| `object_position` | string | `center` | Where the video sits inside the frame when its aspect doesn't match the frame's. One of `center`, `top`, `bottom`, `left`, `right` |
+
+Example — alarm panel that reveals two cameras when armed:
+
+```yaml
+type: custom:status-button-card
+entity: alarm_control_panel.house
+state_appearances:
+  - state: armed_home
+    icon: mdi:shield-home
+    cameras:
+      - entity: camera.front_door
+      - entity: camera.driveway
+  - state: armed_away
+    icon: mdi:shield-lock
+    cameras:
+      - entity: camera.front_door
+        aspect_ratio: 4 / 3
+        object_fit: cover
+        object_position: bottom
+      - entity: camera.driveway
+```
 
 ### Action Options
 

@@ -5,3 +5,6 @@ node_modules/
 *.log
 coverage/
 .env
+
+# TypeScript declarations emitted alongside the bundle aren't needed for HACS.
+dist/src/

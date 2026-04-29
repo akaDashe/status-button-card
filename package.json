@@ -1,6 +1,6 @@
 {
   "name": "status-button-card",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "private": true,
   "type": "module",
   "description": "A customisable button card for Home Assistant focused on entity status with state-based icons, colors, and labels",
@@ -8,6 +8,10 @@
   "scripts": {
     "build": "rollup -c",
     "watch": "rollup -c --watch",
+    "deploy": "DEPLOY=1 rollup -c",
+    "dev": "DEPLOY=1 rollup -c --watch",
+    "bump": "python3 scripts/bump-resource.py",
+    "push": "npm run deploy && npm run bump",
     "lint": "eslint \"src/**/*.ts\"",
     "lint:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"src/**/*.ts\"",
