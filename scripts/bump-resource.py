@@ -1,7 +1,18 @@
 #!/usr/bin/env python3
-"""Bump the ?hacstag= query on the deployed card's Lovelace resource.
+"""Point the deployed card's Lovelace resource at the freshly-built hashed JS.
 
-Forces every browser to refetch the JS by changing its cache-key URL.
+The rollup deploy plugin emits two files alongside each other:
+  <name>.js               ← stable filename HACS validates against
+  <name>.<hash>.js        ← content-hashed sibling produced this build
+
+It also writes the hash to dist/.deploy-hash. We read that, then rewrite the
+Lovelace resource URL to /hacsfiles/<dir>/<name>.<hash>.js. Because the URL
+itself changes whenever the source changes, browser HTTP cache, HA service
+worker, and Lovelace's client-side resource list cannot serve a stale copy.
+
+Falls back to bumping a ?hacstag= query if .deploy-hash is missing so the
+script still works for projects on the old deploy pipeline.
+
 Reads HA_URL and HA_TOKEN from <repo>/../.env. Override the resource match
 with --name foo or RESOURCE_NAME=foo.
 
@@ -50,6 +61,39 @@ async def call(ws, msg_id: int, type_: str, **payload):
         raise RuntimeError(f"{type_} failed: {msg.get('error', {}).get('message', msg)}")
 
 
+def read_deploy_hash() -> str | None:
+    hash_path = REPO_ROOT / "dist" / ".deploy-hash"
+    if not hash_path.exists():
+        return None
+    h = hash_path.read_text().strip()
+    return h or None
+
+
+def build_hashed_url(current_url: str, name: str, deploy_hash: str) -> str:
+    """Rewrite the resource URL so its filename ends in .<hash>.js.
+
+    Idempotent: strips any existing hash suffix before applying the new one,
+    and drops any ?hacstag query so the URL becomes one stable cache key.
+    """
+    path = current_url.split("?", 1)[0]
+    directory, _, filename = path.rpartition("/")
+    # Strip trailing ".js" plus any ".<hash>" segment between name and ".js".
+    if filename.endswith(".js"):
+        stem = filename[:-3]
+        if stem.startswith(f"{name}."):
+            # name.<hash> → name
+            stem = name
+        elif stem != name:
+            # Unexpected layout — keep the stem as-is rather than guessing.
+            pass
+        else:
+            stem = name
+    else:
+        stem = name
+    new_filename = f"{stem}.{deploy_hash}.js"
+    return f"{directory}/{new_filename}" if directory else new_filename
+
+
 async def bump(ha_url: str, token: str, resource_name: str) -> None:
     ws_url = ha_url.replace("http://", "ws://", 1).replace("https://", "wss://", 1) + "/api/websocket"
     async with websockets.connect(ws_url) as ws:
@@ -70,8 +114,17 @@ async def bump(ha_url: str, token: str, resource_name: str) -> None:
                 print(f"  {r['url']}", file=sys.stderr)
             sys.exit(1)
 
-        base_url = target["url"].split("?", 1)[0]
-        new_url = f"{base_url}?hacstag={int(time.time() * 1000)}"
+        deploy_hash = read_deploy_hash()
+        if deploy_hash:
+            new_url = build_hashed_url(target["url"], resource_name, deploy_hash)
+        else:
+            # Fallback for projects/builds that didn't produce a hashed file.
+            base_url = target["url"].split("?", 1)[0]
+            new_url = f"{base_url}?hacstag={int(time.time() * 1000)}"
+
+        if new_url == target["url"]:
+            print(f"[bump] resource URL already current: {new_url}")
+            return
 
         await call(
             ws,

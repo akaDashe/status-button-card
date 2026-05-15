@@ -1,73 +1,381 @@
-import { LitElement, html, css, nothing } from "lit";
+import { LitElement, html, css, nothing, type TemplateResult } from "lit";
 import { property, state, customElement } from "lit/decorators.js";
-import { EDITOR_TAG, COLOR_OPTIONS } from "./const";
-import type {
-  StatusButtonCardConfig,
-  HomeAssistant,
-  StateAppearance,
-  ActionConfig,
-  CameraConfig,
-} from "./types";
+import { EDITOR_TAG } from "./const";
+import {
+  COLOR_SELECT_OPTIONS,
+  buildStateOptions,
+  colorFromFormValue,
+  colorToFormValue,
+  reorderList,
+} from "./editor-helpers";
+import type { StatusButtonCardConfig, HomeAssistant, StateAppearance, CameraConfig } from "./types";
 
-const ACTION_TYPES = [
-  { value: "more-info", label: "More info" },
-  { value: "navigate", label: "Navigate" },
-  { value: "toggle", label: "Toggle" },
-  { value: "call-service", label: "Call service" },
-  { value: "perform-action", label: "Perform action" },
-  { value: "url", label: "Open URL" },
-  { value: "none", label: "None" },
-];
-
-// MDI paths
-const mdiCardAccountDetails =
-  "M2,3H22C23.05,3 24,3.95 24,5V19C24,20.05 23.05,21 22,21H2C0.95,21 0,20.05 0,19V5C0,3.95 0.95,3 2,3M14,6V7H22V6H14M14,8V9H21.5V8H14M14,10V11H21V10H14M8,13.91C6,13.91 2,15 2,17V18H14V17C14,15 10,13.91 8,13.91M8,6A3,3 0 0,0 5,9A3,3 0 0,0 8,12A3,3 0 0,0 11,9A3,3 0 0,0 8,6Z";
-const mdiPalette =
-  "M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z";
+// MDI paths used as inline icons on expansion panels.
+const mdiCamera =
+  "M4,4H7L9,2H15L17,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9Z";
 const mdiListBox =
   "M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M7,7H9V9H7V7M7,11H9V13H7V11M7,15H9V17H7V15M17,17H11V15H17V17M17,13H11V11H17V13M17,9H11V7H17V9Z";
-const mdiGestureTap =
-  "M10,9A1,1 0 0,1 11,8A1,1 0 0,1 12,9V13.47L13.21,13.6L18.15,15.79C18.68,16.03 19,16.56 19,17.14V21.5C18.97,22.32 18.32,22.97 17.5,23H11C10.62,23 10.26,22.85 10,22.57L5.1,18.37L5.84,17.6C6.03,17.39 6.3,17.28 6.58,17.28H6.8L10,19V9M11,5A4,4 0 0,1 15,9C15,10.5 14.2,11.77 13,12.46V11.24C13.61,10.69 14,9.89 14,9A3,3 0 0,0 11,6A3,3 0 0,0 8,9C8,9.89 8.39,10.69 9,11.24V12.46C7.8,11.77 7,10.5 7,9A4,4 0 0,1 11,5Z";
 
-const _loadPromise = (async () => {
-  const needed = [
-    "ha-entity-picker",
-    "ha-icon-picker",
-    "ha-switch",
-    "ha-textfield",
-    "ha-select",
-    "ha-list-item",
-    "ha-expansion-panel",
-    "ha-button",
-    "ha-icon-button",
-    "ha-formfield",
-    "ha-svg-icon",
-  ];
-  if (needed.every((t) => customElements.get(t))) return;
-  try {
-    const helpers = await (window as any).loadCardHelpers?.();
-    if (!helpers) return;
-    const card = await helpers.createCardElement({
-      type: "entities",
-      entities: ["sun.sun"],
-    });
-    if (card) await card.constructor?.getConfigElement?.();
-  } catch (_) {
-    /* expected */
-  }
-})();
+/** Tiny inline reimplementation of custom-card-helpers' fireEvent. */
+function fireEvent(
+  node: HTMLElement,
+  type: string,
+  detail: unknown,
+  options?: { bubbles?: boolean; cancelable?: boolean; composed?: boolean },
+): void {
+  node.dispatchEvent(
+    new CustomEvent(type, {
+      detail,
+      bubbles: options?.bubbles ?? true,
+      cancelable: Boolean(options?.cancelable),
+      composed: options?.composed ?? true,
+    }),
+  );
+}
 
 @customElement(EDITOR_TAG)
 export class StatusButtonCardEditor extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
   @state() private _config!: StatusButtonCardConfig;
-  @state() private _expandedAppearance: number = -1;
-  @state() private _ready = false;
+  @state() private _expandedAppearance = -1;
+  // Drag-to-reorder state for the State Overrides list. `_dragIndex` is the
+  // source row; `_dropBefore` is the index the dragged row will be inserted
+  // BEFORE (so list.length means "after the last item"). -1 means "no drag
+  // in progress / no visible drop indicator".
+  @state() private _dragIndex = -1;
+  @state() private _dropBefore = -1;
 
-  async connectedCallback() {
-    super.connectedCallback();
-    await _loadPromise;
-    this._ready = true;
+  public setConfig(config: StatusButtonCardConfig): void {
+    this._config = config;
+  }
+
+  // Top-level schema rendered via ha-form. Entity, secondary entity, then
+  // collapsible Appearance + Actions sections. State Overrides remain custom
+  // because they're a list of objects with nested per-item lists (cameras),
+  // which ha-form has no first-class pattern for.
+  private _topSchema() {
+    return [
+      { name: "entity", required: true, selector: { entity: {} } },
+      { name: "secondary_entity", selector: { entity: {} } },
+      {
+        type: "expandable",
+        name: "",
+        title: "Appearance",
+        iconPath:
+          "M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z",
+        flatten: true,
+        schema: [
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+          {
+            name: "",
+            type: "grid",
+            schema: [
+              { name: "show_name", selector: { boolean: {} } },
+              { name: "show_label", selector: { boolean: {} } },
+            ],
+          },
+          {
+            name: "",
+            type: "grid",
+            schema: [
+              {
+                name: "active_color",
+                selector: { select: { options: COLOR_SELECT_OPTIONS, mode: "dropdown" } },
+              },
+              {
+                name: "inactive_color",
+                selector: { select: { options: COLOR_SELECT_OPTIONS, mode: "dropdown" } },
+              },
+              {
+                name: "transitional_color",
+                selector: { select: { options: COLOR_SELECT_OPTIONS, mode: "dropdown" } },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        type: "expandable",
+        name: "",
+        title: "Actions",
+        iconPath:
+          "M10,9A1,1 0 0,1 11,8A1,1 0 0,1 12,9V13.47L13.21,13.6L18.15,15.79C18.68,16.03 19,16.56 19,17.14V21.5C18.97,22.32 18.32,22.97 17.5,23H11C10.62,23 10.26,22.85 10,22.57L5.1,18.37L5.84,17.6C6.03,17.39 6.3,17.28 6.58,17.28H6.8L10,19V9M11,5A4,4 0 0,1 15,9C15,10.5 14.2,11.77 13,12.46V11.24C13.61,10.69 14,9.89 14,9A3,3 0 0,0 11,6A3,3 0 0,0 8,9C8,9.89 8.39,10.69 9,11.24V12.46C7.8,11.77 7,10.5 7,9A4,4 0 0,1 11,5Z",
+        flatten: true,
+        schema: [
+          {
+            name: "tap_action",
+            selector: { ui_action: { default_action: "more-info" } },
+          },
+          {
+            type: "optional_actions",
+            name: "",
+            flatten: true,
+            schema: (["double_tap_action", "hold_action"] as const).map((a) => ({
+              name: a,
+              selector: { ui_action: { default_action: "none" as const } },
+            })),
+          },
+        ],
+      },
+    ];
+  }
+
+  // Per-state-appearance form schema. The state-value dropdown is built from
+  // the configured entity's known/possible states, plus the secondary
+  // entity's states prefixed with `secondary:`. custom_value: true keeps the
+  // door open for template-style values or odd integrations.
+  private _appearanceSchema() {
+    const stateOptions = buildStateOptions(
+      this.hass,
+      this._config?.entity,
+      this._config?.secondary_entity,
+    );
+    return [
+      {
+        name: "state",
+        required: true,
+        selector: {
+          select: {
+            mode: "dropdown",
+            custom_value: true,
+            options: stateOptions,
+          },
+        },
+      },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "icon", selector: { icon: {} } },
+          {
+            name: "color",
+            selector: { select: { options: COLOR_SELECT_OPTIONS, mode: "dropdown" } },
+          },
+        ],
+      },
+      { name: "label", selector: { text: {} } },
+      { name: "animate", selector: { boolean: {} } },
+    ];
+  }
+
+  // Per-camera form schema rendered inside each state appearance's camera list.
+  private _cameraSchema() {
+    return [
+      {
+        name: "entity",
+        required: true,
+        selector: { entity: { domain: "camera" } },
+      },
+      {
+        name: "",
+        type: "grid",
+        schema: [
+          { name: "aspect_ratio", selector: { text: {} } },
+          {
+            name: "object_fit",
+            selector: {
+              select: {
+                mode: "dropdown",
+                options: [
+                  { value: "cover", label: "Cover (crop to fill)" },
+                  { value: "contain", label: "Contain (letterbox)" },
+                ],
+              },
+            },
+          },
+          {
+            name: "object_position",
+            selector: {
+              select: {
+                mode: "dropdown",
+                options: [
+                  { value: "center", label: "Center" },
+                  { value: "top", label: "Top" },
+                  { value: "bottom", label: "Bottom" },
+                  { value: "left", label: "Left" },
+                  { value: "right", label: "Right" },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    ];
+  }
+
+  private _computeLabel = (schema: { name: string; title?: string }): string => {
+    if (schema.title) return schema.title;
+    const labels: Record<string, string> = {
+      entity: "Entity",
+      secondary_entity: "Secondary entity (optional)",
+      name: "Name (leave empty for entity name)",
+      icon: "Icon",
+      show_name: "Show name",
+      show_label: "Show label (state)",
+      active_color: "Active",
+      inactive_color: "Inactive",
+      transitional_color: "Transitional",
+      tap_action: "Tap action",
+      double_tap_action: "Double-tap action",
+      hold_action: "Hold action",
+      state: "State value",
+      label: "Label",
+      color: "Color",
+      animate: "Blink animation",
+      aspect_ratio: "Aspect ratio (e.g. 16/9)",
+      object_fit: "Video fit",
+      object_position: "Video position",
+    };
+    return labels[schema.name] ?? schema.name;
+  };
+
+  // ha-form sends back the FULL merged data on every change. Normalize the
+  // color sentinels and prune empty optionals so the YAML output stays clean.
+  private _topChanged = (ev: CustomEvent): void => {
+    ev.stopPropagation();
+    const incoming = ev.detail.value as StatusButtonCardConfig;
+    const next: StatusButtonCardConfig = {
+      ...this._config,
+      ...incoming,
+      active_color: colorFromFormValue(incoming.active_color),
+      inactive_color: colorFromFormValue(incoming.inactive_color),
+      transitional_color: colorFromFormValue(incoming.transitional_color),
+      // Default-true toggles round-trip as `true` from ha-form. Don't
+      // persist that to YAML — only persist the non-default `false`.
+      show_name: incoming.show_name === false ? false : undefined,
+      show_label: incoming.show_label === false ? false : undefined,
+    };
+    // Strip undefined-valued keys so the resulting YAML is minimal.
+    (Object.keys(next) as (keyof StatusButtonCardConfig)[]).forEach((k) => {
+      if (next[k] === undefined) delete next[k];
+    });
+    this._config = next;
+    fireEvent(this, "config-changed", { config: this._config });
+  };
+
+  private _appearanceChanged(index: number, ev: CustomEvent): void {
+    ev.stopPropagation();
+    const incoming = ev.detail.value as StateAppearance;
+    const list = [...(this._config.state_appearances || [])];
+    list[index] = {
+      ...list[index],
+      ...incoming,
+      color: colorFromFormValue(incoming.color),
+    };
+    // Prune undefineds.
+    (Object.keys(list[index]) as (keyof StateAppearance)[]).forEach((k) => {
+      if (list[index][k] === undefined) delete list[index][k];
+    });
+    this._writeConfig({ state_appearances: list });
+  }
+
+  private _addAppearance(): void {
+    const list = [...(this._config.state_appearances || []), { state: "" } as StateAppearance];
+    this._expandedAppearance = list.length - 1;
+    this._writeConfig({ state_appearances: list });
+  }
+
+  private _removeAppearance(index: number): void {
+    const list = (this._config.state_appearances || []).filter((_, i) => i !== index);
+    this._expandedAppearance = -1;
+    this._writeConfig({
+      state_appearances: list.length ? list : undefined,
+    });
+  }
+
+  // Drag-to-reorder. Only the .drag-handle is draggable=true, so users can
+  // click the rest of the header (edit/delete buttons, expand toggle) without
+  // accidentally starting a drag.
+  private _onDragStart = (index: number) => (ev: DragEvent) => {
+    this._dragIndex = index;
+    this._dropBefore = index;
+    if (ev.dataTransfer) {
+      ev.dataTransfer.effectAllowed = "move";
+      // Firefox requires non-empty data on the dataTransfer to start a drag.
+      ev.dataTransfer.setData("text/plain", String(index));
+    }
+  };
+
+  private _onDragOverItem = (index: number) => (ev: DragEvent) => {
+    if (this._dragIndex < 0) return;
+    ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
+    // Drop above or below based on whether the cursor is in the top half
+    // of the item.
+    const target = ev.currentTarget as HTMLElement | null;
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const above = ev.clientY - rect.top < rect.height / 2;
+    const before = above ? index : index + 1;
+    if (before !== this._dropBefore) this._dropBefore = before;
+  };
+
+  private _onDrop = (ev: DragEvent) => {
+    if (this._dragIndex < 0) return;
+    ev.preventDefault();
+    const from = this._dragIndex;
+    const to = this._dropBefore;
+    this._dragIndex = -1;
+    this._dropBefore = -1;
+    const list = this._config.state_appearances || [];
+    const next = reorderList(list, from, to);
+    if (next === list) return;
+    // Keep the moved item expanded if it was — recompute its new index.
+    if (this._expandedAppearance === from) {
+      this._expandedAppearance = next.indexOf(list[from]);
+    }
+    this._writeConfig({ state_appearances: next });
+  };
+
+  private _onDragEnd = () => {
+    this._dragIndex = -1;
+    this._dropBefore = -1;
+  };
+
+  private _normalizedCameras(app: StateAppearance): CameraConfig[] {
+    return (app.cameras || []).map((c) => (typeof c === "string" ? { entity: c } : { ...c }));
+  }
+
+  private _cameraChanged(appIndex: number, camIndex: number, ev: CustomEvent): void {
+    ev.stopPropagation();
+    const incoming = ev.detail.value as CameraConfig;
+    const app = this._config.state_appearances?.[appIndex];
+    if (!app) return;
+    const cams = this._normalizedCameras(app);
+    cams[camIndex] = { ...cams[camIndex], ...incoming };
+    // Default values shouldn't be persisted.
+    if (cams[camIndex].object_fit === "cover") delete cams[camIndex].object_fit;
+    if (cams[camIndex].object_position === "center") delete cams[camIndex].object_position;
+    if (!cams[camIndex].aspect_ratio) delete cams[camIndex].aspect_ratio;
+    this._writeAppearanceCameras(appIndex, cams);
+  }
+
+  private _addCamera(appIndex: number): void {
+    const app = this._config.state_appearances?.[appIndex];
+    if (!app) return;
+    this._writeAppearanceCameras(appIndex, [...this._normalizedCameras(app), { entity: "" }]);
+  }
+
+  private _removeCamera(appIndex: number, camIndex: number): void {
+    const app = this._config.state_appearances?.[appIndex];
+    if (!app) return;
+    const cams = this._normalizedCameras(app).filter((_, i) => i !== camIndex);
+    this._writeAppearanceCameras(appIndex, cams);
+  }
+
+  private _writeAppearanceCameras(appIndex: number, cams: CameraConfig[]): void {
+    const list = [...(this._config.state_appearances || [])];
+    list[appIndex] = { ...list[appIndex], cameras: cams.length ? cams : undefined };
+    this._writeConfig({ state_appearances: list });
+  }
+
+  private _writeConfig(patch: Partial<StatusButtonCardConfig>): void {
+    this._config = { ...this._config, ...patch };
+    (Object.keys(this._config) as (keyof StatusButtonCardConfig)[]).forEach((k) => {
+      if (this._config[k] === undefined) delete this._config[k];
+    });
+    fireEvent(this, "config-changed", { config: this._config });
   }
 
   static get styles() {
@@ -76,99 +384,69 @@ export class StatusButtonCardEditor extends LitElement {
         display: block;
       }
 
-      ha-expansion-panel {
+      ha-form {
         display: block;
-        --expansion-panel-content-padding: 0;
-        border-radius: 0;
-        --ha-card-border-radius: 0;
       }
 
-      ha-expansion-panel ha-svg-icon {
-        color: var(--secondary-text-color);
+      .state-overrides {
+        margin-top: 16px;
       }
 
-      h3 {
-        margin: 0;
-        font-size: inherit;
-        font-weight: inherit;
-      }
-
-      .content {
-        padding: 12px;
-      }
-
-      .content > *:not(:first-child) {
-        margin-top: 8px;
-      }
-
-      .side-by-side {
+      .section-title {
         display: flex;
-        align-items: flex-end;
-      }
-
-      .side-by-side > * {
-        flex: 1;
-        padding-right: 8px;
-        padding-inline-end: 8px;
-        padding-inline-start: initial;
-      }
-
-      .side-by-side > *:last-child {
-        flex: 1;
-        padding-right: 0;
-        padding-inline-end: 0;
-        padding-inline-start: initial;
-      }
-
-      .triple {
-        display: flex;
-        align-items: flex-end;
-      }
-
-      .triple > * {
-        flex: 1;
-        padding-right: 8px;
-        padding-inline-end: 8px;
-        padding-inline-start: initial;
-      }
-
-      .triple > *:last-child {
-        flex: 1;
-        padding-right: 0;
-        padding-inline-end: 0;
-        padding-inline-start: initial;
-      }
-
-      ha-textfield,
-      ha-icon-picker,
-      ha-entity-picker,
-      ha-select {
-        display: block;
-        width: 100%;
-      }
-
-      ha-formfield {
-        display: flex;
-        min-height: 56px;
         align-items: center;
-      }
-
-      ha-switch {
-        padding: 16px 6px;
+        gap: 8px;
+        font-size: 16px;
+        font-weight: 500;
+        margin: 16px 0 8px;
+        color: var(--primary-text-color);
       }
 
       .appearance-item {
         border: 1px solid var(--divider-color);
         border-radius: 8px;
         overflow: hidden;
+        margin-bottom: 8px;
+      }
+
+      .appearance-item.dragging {
+        opacity: 0.5;
       }
 
       .appearance-header {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 4px 4px 4px 16px;
+        padding: 4px 4px 4px 8px;
         min-height: 48px;
+        background: var(--secondary-background-color);
+      }
+
+      .drag-handle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        cursor: grab;
+        color: var(--secondary-text-color);
+        flex-shrink: 0;
+      }
+
+      .drag-handle:active {
+        cursor: grabbing;
+      }
+
+      .drag-handle ha-svg-icon {
+        --mdc-icon-size: 18px;
+      }
+
+      .drop-indicator {
+        height: 2px;
+        margin: 0 4px;
+        background: var(--primary-color, #03a9f4);
+        border-radius: 1px;
+        pointer-events: none;
       }
 
       .appearance-label {
@@ -178,233 +456,96 @@ export class StatusButtonCardEditor extends LitElement {
         color: var(--primary-text-color);
       }
 
-      .appearance-options {
+      .appearance-body {
         padding: 12px;
         border-top: 1px solid var(--divider-color);
       }
 
-      .appearance-options > *:not(:first-child) {
+      .camera-item {
+        border: 1px solid var(--divider-color);
+        border-radius: 6px;
+        padding: 12px;
+        margin-top: 8px;
+      }
+
+      .camera-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 4px;
+      }
+
+      .add-btn {
         margin-top: 8px;
       }
 
       .hint {
         font-size: 12px;
         color: var(--secondary-text-color);
-        margin: 0;
-        padding-top: 4px;
-      }
-
-      .select-row {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        font-size: 14px;
-        flex: 1;
-      }
-
-      .select-row > span {
-        font-size: 12px;
-        color: var(--secondary-text-color);
-        padding-left: 4px;
-      }
-
-      .select-row > select {
-        appearance: none;
-        background-color: var(
-          --mdc-text-field-fill-color,
-          rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.05)
-        );
-        color: var(--primary-text-color, inherit);
-        border: none;
-        border-bottom: 1px solid var(--mdc-text-field-idle-line-color, rgba(0, 0, 0, 0.42));
-        border-radius: 4px 4px 0 0;
-        padding: 14px 32px 14px 12px;
-        font: inherit;
-        font-size: 14px;
-        line-height: 1.15;
-        width: 100%;
-        cursor: pointer;
-        transition: border-bottom-color 150ms ease;
-        background-image:
-          linear-gradient(45deg, transparent 50%, currentColor 50%),
-          linear-gradient(135deg, currentColor 50%, transparent 50%);
-        background-position:
-          calc(100% - 16px) 50%,
-          calc(100% - 11px) 50%;
-        background-size:
-          5px 5px,
-          5px 5px;
-        background-repeat: no-repeat;
-      }
-
-      .select-row > select:hover {
-        border-bottom-color: var(--primary-text-color);
-      }
-
-      .select-row > select:focus {
-        outline: none;
-        border-bottom: 2px solid var(--primary-color, #03a9f4);
-        padding-bottom: 13px;
+        margin: 4px 0 0;
       }
     `;
   }
 
-  public setConfig(config: StatusButtonCardConfig): void {
-    this._config = config;
+  private _appearanceFormData(app: StateAppearance): StateAppearance {
+    return { ...app, color: colorToFormValue(app.color) as any };
   }
 
-  private _fire(): void {
-    this.dispatchEvent(
-      new CustomEvent("config-changed", {
-        detail: { config: this._config },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
-
-  private _set(key: string, value: any): void {
-    this._config = { ...this._config, [key]: value };
-    this._fire();
-  }
-
-  private _updateAppearance(index: number, update: Partial<StateAppearance>): void {
-    const list = [...(this._config.state_appearances || [])];
-    list[index] = { ...list[index], ...update };
-    this._set("state_appearances", list);
-  }
-
-  private _removeAppearance(index: number): void {
-    const list = (this._config.state_appearances || []).filter((_, i) => i !== index);
-    this._set("state_appearances", list.length ? list : undefined);
-    this._expandedAppearance = -1;
-  }
-
-  private _addAppearance(): void {
-    const list = [...(this._config.state_appearances || []), { state: "" }];
-    this._set("state_appearances", list);
-    this._expandedAppearance = list.length - 1;
-  }
-
-  private _normalizedAppearanceCameras(app: StateAppearance): CameraConfig[] {
-    const list = app.cameras || [];
-    return list.map((c) => (typeof c === "string" ? { entity: c } : { ...c }));
-  }
-
-  private _writeAppearanceCameras(appIndex: number, list: CameraConfig[]): void {
-    // Allow blank intermediate entries while editing — runtime normalizeCameras
-    // filters them out at render time so an unfinished entry is harmless.
-    this._updateAppearance(appIndex, { cameras: list.length ? list : undefined });
-  }
-
-  private _addAppearanceCamera(appIndex: number): void {
-    const app = this._config.state_appearances?.[appIndex];
-    if (!app) return;
-    this._writeAppearanceCameras(appIndex, [
-      ...this._normalizedAppearanceCameras(app),
-      { entity: "" },
-    ]);
-  }
-
-  private _updateAppearanceCamera(
-    appIndex: number,
-    camIndex: number,
-    update: Partial<CameraConfig>,
-  ): void {
-    const app = this._config.state_appearances?.[appIndex];
-    if (!app) return;
-    const list = this._normalizedAppearanceCameras(app);
-    list[camIndex] = { ...list[camIndex], ...update };
-    if (update.aspect_ratio === undefined && "aspect_ratio" in update) {
-      delete list[camIndex].aspect_ratio;
-    }
-    if (update.object_position === undefined && "object_position" in update) {
-      delete list[camIndex].object_position;
-    }
-    if (update.object_fit === undefined && "object_fit" in update) {
-      delete list[camIndex].object_fit;
-    }
-    this._writeAppearanceCameras(appIndex, list);
-  }
-
-  private _removeAppearanceCamera(appIndex: number, camIndex: number): void {
-    const app = this._config.state_appearances?.[appIndex];
-    if (!app) return;
-    const list = this._normalizedAppearanceCameras(app).filter((_, i) => i !== camIndex);
-    this._writeAppearanceCameras(appIndex, list);
-  }
-
-  private _renderActionEditor(
-    key: "tap_action" | "double_tap_action" | "hold_action",
-    label: string,
-  ) {
-    const action: ActionConfig = (this._config as any)[key] || {
-      action: key === "tap_action" ? "more-info" : "none",
+  private _renderCameraItem(appIndex: number, cam: CameraConfig, camIndex: number): TemplateResult {
+    const data = {
+      ...cam,
+      object_fit: cam.object_fit || "cover",
+      object_position: cam.object_position || "center",
     };
-
     return html`
-      <label class="select-row">
-        <span>${label}</span>
-        <select
-          .value=${action.action}
-          @change=${(e: Event) => {
-            const val = (e.target as HTMLSelectElement).value;
-            if (val) this._set(key, { action: val });
-          }}
-        >
-          ${ACTION_TYPES.map((t) => html`<option value=${t.value}>${t.label}</option>`)}
-        </select>
-      </label>
-      ${action.action === "navigate"
-        ? html`<ha-textfield
-            .label=${"Navigation path"}
-            .value=${action.navigation_path || ""}
-            @input=${(e: any) => this._set(key, { ...action, navigation_path: e.target.value })}
-          ></ha-textfield>`
-        : nothing}
-      ${action.action === "url"
-        ? html`<ha-textfield
-            .label=${"URL"}
-            .value=${action.url_path || ""}
-            @input=${(e: any) => this._set(key, { ...action, url_path: e.target.value })}
-          ></ha-textfield>`
-        : nothing}
-      ${action.action === "call-service" || action.action === "perform-action"
-        ? html`
-            <ha-textfield
-              .label=${"Service (e.g. lock.unlock)"}
-              .value=${action.service || action.perform_action || ""}
-              @input=${(e: any) =>
-                this._set(key, {
-                  ...action,
-                  service: e.target.value,
-                  perform_action: e.target.value,
-                })}
-            ></ha-textfield>
-            <ha-textfield
-              .label=${"Service data (JSON, optional)"}
-              .value=${action.service_data ? JSON.stringify(action.service_data) : ""}
-              @input=${(e: any) => {
-                try {
-                  const data = e.target.value ? JSON.parse(e.target.value) : undefined;
-                  this._set(key, { ...action, service_data: data });
-                } catch (_) {
-                  /* expected */
-                }
-              }}
-            ></ha-textfield>
-          `
-        : nothing}
+      <div class="camera-item">
+        <ha-form
+          .hass=${this.hass}
+          .data=${data}
+          .schema=${this._cameraSchema()}
+          .computeLabel=${this._computeLabel}
+          @value-changed=${(e: CustomEvent) => this._cameraChanged(appIndex, camIndex, e)}
+        ></ha-form>
+        <p class="hint">
+          Pair "Cover" + "Bottom" to keep the lower part visible while cropping the top.
+        </p>
+        <div class="camera-actions">
+          <ha-icon-button
+            .path=${"M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"}
+            @click=${() => this._removeCamera(appIndex, camIndex)}
+          ></ha-icon-button>
+        </div>
+      </div>
     `;
   }
 
-  private _renderAppearanceItem(app: StateAppearance, index: number) {
+  private _renderAppearanceItem(app: StateAppearance, index: number): TemplateResult {
     const isExpanded = this._expandedAppearance === index;
     const displayState = app.state || "(empty)";
-
+    const dragging = this._dragIndex === index;
+    // Show the drop indicator above the item we'd land before, or below the
+    // last item when target === list.length.
+    const total = this._config.state_appearances?.length ?? 0;
+    const showAbove = this._dragIndex >= 0 && this._dropBefore === index;
+    const showBelow = this._dragIndex >= 0 && index === total - 1 && this._dropBefore === total;
     return html`
-      <div class="appearance-item">
+      ${showAbove ? html`<div class="drop-indicator"></div>` : nothing}
+      <div
+        class="appearance-item ${dragging ? "dragging" : ""}"
+        @dragover=${this._onDragOverItem(index)}
+        @drop=${this._onDrop}
+      >
         <div class="appearance-header">
+          <span
+            class="drag-handle"
+            draggable="true"
+            title="Drag to reorder — first matching rule wins"
+            @dragstart=${this._onDragStart(index)}
+            @dragend=${this._onDragEnd}
+          >
+            <ha-svg-icon
+              .path=${"M7,19V17H9V19H7M11,19V17H13V19H11M15,19V17H17V19H15M7,15V13H9V15H7M11,15V13H13V15H11M15,15V13H17V15H15M7,11V9H9V11H7M11,11V9H13V11H11M15,11V9H17V11H15M7,7V5H9V7H7M11,7V5H13V7H11M15,7V5H17V7H15Z"}
+            ></ha-svg-icon>
+          </span>
           ${app.icon
             ? html`<ha-icon
                 style="--mdc-icon-size:18px; color:${app.color || "var(--secondary-text-color)"}"
@@ -412,7 +553,7 @@ export class StatusButtonCardEditor extends LitElement {
               ></ha-icon>`
             : nothing}
           <span class="appearance-label">
-            ${displayState}${app.label ? ` \u2192 ${app.label}` : ""}
+            ${displayState}${app.label ? ` → ${app.label}` : ""}
           </span>
           <ha-icon-button
             .path=${"M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"}
@@ -427,293 +568,81 @@ export class StatusButtonCardEditor extends LitElement {
         </div>
         ${isExpanded
           ? html`
-              <div class="appearance-options">
-                <ha-textfield
-                  .label=${"State value"}
-                  .value=${app.state || ""}
-                  @input=${(e: any) => this._updateAppearance(index, { state: e.target.value })}
-                ></ha-textfield>
-                <p class="hint">
-                  Use entity state (e.g. locked, unlocked). For secondary entity prefix with
-                  "secondary:" (e.g. secondary:on).
-                </p>
-
-                <ha-icon-picker
+              <div class="appearance-body">
+                <ha-form
                   .hass=${this.hass}
-                  .label=${"Icon for this state"}
-                  .value=${app.icon || ""}
-                  @value-changed=${(e: CustomEvent) => {
-                    e.stopPropagation();
-                    this._updateAppearance(index, {
-                      icon: e.detail.value || undefined,
-                    });
-                  }}
-                ></ha-icon-picker>
-
-                <ha-textfield
-                  .label=${"Label for this state"}
-                  .value=${app.label || ""}
-                  @input=${(e: any) =>
-                    this._updateAppearance(index, {
-                      label: e.target.value || undefined,
-                    })}
-                ></ha-textfield>
-
-                <label class="select-row">
-                  <span>Color for this state</span>
-                  <select
-                    .value=${app.color || ""}
-                    @change=${(e: Event) => {
-                      const val = (e.target as HTMLSelectElement).value;
-                      this._updateAppearance(index, {
-                        color: val || undefined,
-                      });
-                    }}
-                  >
-                    ${COLOR_OPTIONS.map((c) => html`<option value=${c.value}>${c.label}</option>`)}
-                  </select>
-                </label>
-
-                <ha-formfield .label=${"Blink animation"}>
-                  <ha-switch
-                    .checked=${app.animate === true}
-                    @change=${(e: any) =>
-                      this._updateAppearance(index, {
-                        animate: e.target.checked || undefined,
-                      })}
-                  ></ha-switch>
-                </ha-formfield>
-
-                <p class="hint" style="margin-top: 12px; font-weight: 500">
-                  Cameras revealed by this state
+                  .data=${this._appearanceFormData(app)}
+                  .schema=${this._appearanceSchema()}
+                  .computeLabel=${this._computeLabel}
+                  @value-changed=${(e: CustomEvent) => this._appearanceChanged(index, e)}
+                ></ha-form>
+                <p class="hint">
+                  Pick a state from the dropdown, or type a pattern: <code>locked</code> (exact),
+                  <code>!= unavailable</code>, <code>&gt; 2</code>, <code>&gt;= 2</code>,
+                  <code>&lt; 100</code>, <code>~= ^armed</code> (regex). Prefix with
+                  <code>secondary:</code> to match against the secondary entity (e.g.
+                  <code>secondary:&gt;50</code>).
                 </p>
                 <p class="hint">
-                  Cameras slide down when this state is active. Leave empty to reveal nothing.
+                  <strong>Order matters:</strong> rules are evaluated top-to-bottom and the first
+                  match wins. Drag the grip handle on the left to reorder — put more-specific
+                  patterns above broader ones.
                 </p>
-                ${this._normalizedAppearanceCameras(app).map((cam, camIndex) =>
-                  this._renderAppearanceCameraItem(index, cam, camIndex),
+                <div class="section-title">
+                  <ha-svg-icon .path=${mdiCamera}></ha-svg-icon>
+                  <span>Cameras revealed by this state</span>
+                </div>
+                ${this._normalizedCameras(app).map((cam, ci) =>
+                  this._renderCameraItem(index, cam, ci),
                 )}
-                <ha-button @click=${() => this._addAppearanceCamera(index)}>Add camera</ha-button>
+                <ha-button outlined class="add-btn" @click=${() => this._addCamera(index)}>
+                  Add camera
+                </ha-button>
               </div>
             `
           : nothing}
       </div>
-    `;
-  }
-
-  private _renderAppearanceCameraItem(appIndex: number, cam: CameraConfig, camIndex: number) {
-    return html`
-      <div
-        class="appearance-item"
-        style="background: var(--secondary-background-color, transparent)"
-      >
-        <div class="appearance-options">
-          <ha-entity-picker
-            .hass=${this.hass}
-            .value=${cam.entity || ""}
-            .label=${"Camera entity"}
-            .includeDomains=${["camera"]}
-            allow-custom-entity
-            @value-changed=${(e: CustomEvent) => {
-              e.stopPropagation();
-              this._updateAppearanceCamera(appIndex, camIndex, {
-                entity: e.detail.value || "",
-              });
-            }}
-          ></ha-entity-picker>
-
-          <ha-textfield
-            .label=${"Aspect ratio (optional, e.g. 16/9, 9/16, 4/3)"}
-            .value=${cam.aspect_ratio || ""}
-            placeholder="16 / 9"
-            @input=${(e: any) =>
-              this._updateAppearanceCamera(appIndex, camIndex, {
-                aspect_ratio: e.target.value || undefined,
-              })}
-          ></ha-textfield>
-          <p class="hint">Frame aspect ratio. Defaults to 16/9 across all cameras.</p>
-
-          <label class="select-row">
-            <span>Video fit</span>
-            <select
-              .value=${cam.object_fit || "cover"}
-              @change=${(e: Event) => {
-                const val = (e.target as HTMLSelectElement).value as "contain" | "cover";
-                this._updateAppearanceCamera(appIndex, camIndex, {
-                  object_fit: val === "cover" ? undefined : val,
-                });
-              }}
-            >
-              <option value="cover">Cover (crop to fill, default)</option>
-              <option value="contain">Contain (letterbox, no crop)</option>
-            </select>
-          </label>
-
-          <label class="select-row">
-            <span>Video position within frame</span>
-            <select
-              .value=${cam.object_position || "center"}
-              @change=${(e: Event) => {
-                const val = (e.target as HTMLSelectElement).value;
-                this._updateAppearanceCamera(appIndex, camIndex, {
-                  object_position: val === "center" ? undefined : val,
-                });
-              }}
-            >
-              <option value="center">Center (default)</option>
-              <option value="top">Top</option>
-              <option value="bottom">Bottom</option>
-              <option value="left">Left</option>
-              <option value="right">Right</option>
-            </select>
-          </label>
-          <p class="hint">
-            Pair "Cover" with "Bottom" to keep the lower part of the video visible while cropping
-            the top.
-          </p>
-          <p class="hint">
-            Where the video sits inside the frame when its aspect doesn't match the frame's.
-          </p>
-
-          <ha-button @click=${() => this._removeAppearanceCamera(appIndex, camIndex)}>
-            Remove camera
-          </ha-button>
-        </div>
-      </div>
+      ${showBelow ? html`<div class="drop-indicator"></div>` : nothing}
     `;
   }
 
   protected render() {
-    if (!this.hass || !this._config || !this._ready) return html``;
+    if (!this.hass || !this._config) return nothing;
+
+    const topData = {
+      ...this._config,
+      // show_name/show_label default to true at the runtime layer. Surface
+      // that to ha-form so the toggles render in the active state when the
+      // user hasn't explicitly set them. Persisting `undefined` rather than
+      // `true` keeps the resulting YAML minimal.
+      show_name: this._config.show_name !== false,
+      show_label: this._config.show_label !== false,
+      active_color: colorToFormValue(this._config.active_color),
+      inactive_color: colorToFormValue(this._config.inactive_color),
+      transitional_color: colorToFormValue(this._config.transitional_color),
+    };
 
     const appearances = this._config.state_appearances || [];
 
     return html`
-      <!-- Entity -->
-      <ha-expansion-panel outlined expanded>
-        <ha-svg-icon slot="leading-icon" .path=${mdiCardAccountDetails}></ha-svg-icon>
-        <h3 slot="header">Entity</h3>
-        <div class="content">
-          <ha-entity-picker
-            .hass=${this.hass}
-            .value=${this._config.entity || ""}
-            .label=${"Entity"}
-            allow-custom-entity
-            @value-changed=${(e: CustomEvent) => {
-              e.stopPropagation();
-              this._set("entity", e.detail.value);
-            }}
-          ></ha-entity-picker>
+      <ha-form
+        .hass=${this.hass}
+        .data=${topData}
+        .schema=${this._topSchema()}
+        .computeLabel=${this._computeLabel}
+        @value-changed=${this._topChanged}
+      ></ha-form>
 
-          <ha-entity-picker
-            .hass=${this.hass}
-            .value=${this._config.secondary_entity || ""}
-            .label=${"Secondary entity (optional)"}
-            allow-custom-entity
-            @value-changed=${(e: CustomEvent) => {
-              e.stopPropagation();
-              this._set("secondary_entity", e.detail.value || undefined);
-            }}
-          ></ha-entity-picker>
+      <div class="state-overrides">
+        <div class="section-title">
+          <ha-svg-icon .path=${mdiListBox}></ha-svg-icon>
+          <span>State Overrides</span>
         </div>
-      </ha-expansion-panel>
-
-      <!-- Appearance -->
-      <ha-expansion-panel outlined>
-        <ha-svg-icon slot="leading-icon" .path=${mdiPalette}></ha-svg-icon>
-        <h3 slot="header">Appearance</h3>
-        <div class="content">
-          <ha-textfield
-            .label=${"Name (leave empty for entity name)"}
-            .value=${this._config.name || ""}
-            @input=${(e: any) => this._set("name", e.target.value || undefined)}
-          ></ha-textfield>
-
-          <ha-icon-picker
-            .hass=${this.hass}
-            .label=${"Default icon (leave empty for auto)"}
-            .value=${this._config.icon || ""}
-            @value-changed=${(e: CustomEvent) => {
-              e.stopPropagation();
-              this._set("icon", e.detail.value || undefined);
-            }}
-          ></ha-icon-picker>
-
-          <ha-formfield .label=${"Show name"}>
-            <ha-switch
-              .checked=${this._config.show_name !== false}
-              @change=${(e: any) => this._set("show_name", e.target.checked ? undefined : false)}
-            ></ha-switch>
-          </ha-formfield>
-
-          <ha-formfield .label=${"Show label (state)"}>
-            <ha-switch
-              .checked=${this._config.show_label !== false}
-              @change=${(e: any) => this._set("show_label", e.target.checked ? undefined : false)}
-            ></ha-switch>
-          </ha-formfield>
-
-          <div class="triple">
-            <label class="select-row">
-              <span>Active</span>
-              <select
-                .value=${this._config.active_color || ""}
-                @change=${(e: Event) => {
-                  const val = (e.target as HTMLSelectElement).value;
-                  this._set("active_color", val || undefined);
-                }}
-              >
-                ${COLOR_OPTIONS.map((c) => html`<option value=${c.value}>${c.label}</option>`)}
-              </select>
-            </label>
-            <label class="select-row">
-              <span>Inactive</span>
-              <select
-                .value=${this._config.inactive_color || ""}
-                @change=${(e: Event) => {
-                  const val = (e.target as HTMLSelectElement).value;
-                  this._set("inactive_color", val || undefined);
-                }}
-              >
-                ${COLOR_OPTIONS.map((c) => html`<option value=${c.value}>${c.label}</option>`)}
-              </select>
-            </label>
-            <label class="select-row">
-              <span>Transitional</span>
-              <select
-                .value=${this._config.transitional_color || ""}
-                @change=${(e: Event) => {
-                  const val = (e.target as HTMLSelectElement).value;
-                  this._set("transitional_color", val || undefined);
-                }}
-              >
-                ${COLOR_OPTIONS.map((c) => html`<option value=${c.value}>${c.label}</option>`)}
-              </select>
-            </label>
-          </div>
-        </div>
-      </ha-expansion-panel>
-
-      <!-- State Overrides -->
-      <ha-expansion-panel outlined>
-        <ha-svg-icon slot="leading-icon" .path=${mdiListBox}></ha-svg-icon>
-        <h3 slot="header">State Overrides</h3>
-        <div class="content">
-          ${appearances.map((app, index) => this._renderAppearanceItem(app, index))}
-          <ha-button @click=${this._addAppearance}> Add state override </ha-button>
-        </div>
-      </ha-expansion-panel>
-
-      <!-- Actions -->
-      <ha-expansion-panel outlined>
-        <ha-svg-icon slot="leading-icon" .path=${mdiGestureTap}></ha-svg-icon>
-        <h3 slot="header">Actions</h3>
-        <div class="content">
-          ${this._renderActionEditor("tap_action", "Tap action")}
-          ${this._renderActionEditor("double_tap_action", "Double tap action")}
-          ${this._renderActionEditor("hold_action", "Hold action")}
-        </div>
-      </ha-expansion-panel>
+        ${appearances.map((app, i) => this._renderAppearanceItem(app, i))}
+        <ha-button outlined class="add-btn" @click=${this._addAppearance}>
+          Add state override
+        </ha-button>
+      </div>
     `;
   }
 }
