@@ -126,15 +126,28 @@ jobs:
         run: |
           set -euo pipefail
           current=$(node -p "require('./package.json').version")
-          # Strip pre-release suffix (-beta.N, -rc.N, etc.) before bumping
-          base=${current%%-*}
-          IFS=. read -r major minor patch <<<"$base"
-          case "$BUMP" in
-            major) new="$((major + 1)).0.0" ;;
-            minor) new="$major.$((minor + 1)).0" ;;
-            patch) new="$major.$minor.$((patch + 1))" ;;
-          esac
-          echo "Bumping $current -> $new ($BUMP)"
+
+          # Pre-release versions (e.g. 1.0.0-beta.3) iterate the pre-release
+          # counter on every merge regardless of feat/fix branch prefix. This
+          # keeps a beta line a beta line — you don't accidentally graduate to
+          # stable just because a feat/ branch merged. To leave the pre-release
+          # line, drop the suffix in package.json manually before merging.
+          if [[ "$current" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-([a-zA-Z]+)\.([0-9]+)$ ]]; then
+            base="${BASH_REMATCH[1]}"
+            pre_label="${BASH_REMATCH[2]}"
+            pre_num="${BASH_REMATCH[3]}"
+            new="${base}-${pre_label}.$((pre_num + 1))"
+            echo "Pre-release iteration: $current -> $new"
+          else
+            IFS=. read -r major minor patch <<<"$current"
+            case "$BUMP" in
+              major) new="$((major + 1)).0.0" ;;
+              minor) new="$major.$((minor + 1)).0" ;;
+              patch) new="$major.$minor.$((patch + 1))" ;;
+            esac
+            echo "Bumping $current -> $new ($BUMP)"
+          fi
+
           echo "current=$current" >> "$GITHUB_OUTPUT"
           echo "new=$new" >> "$GITHUB_OUTPUT"
 
@@ -231,8 +244,15 @@ jobs:
             git add package-lock.json
           fi
           git commit -m "release: deploy version $NEW"
-          git tag "v$NEW"
-          git push origin main --follow-tags
+          # Annotated tag (not lightweight) — `git push --follow-tags` only
+          # pushes annotated tags, and a lightweight tag here previously left
+          # the tag on the runner with the GitHub Release step failing.
+          git tag -a "v$NEW" -m "Release v$NEW"
+          # Push commit + tag explicitly. `--follow-tags` would also work now
+          # that the tag is annotated, but pushing the tag by name is
+          # belt-and-braces and makes the intent obvious.
+          git push origin main
+          git push origin "v$NEW"
 
       - name: Create GitHub Release
         if: steps.bump.outputs.skip != 'true'
