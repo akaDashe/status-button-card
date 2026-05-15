@@ -14,10 +14,10 @@ A customisable button card for [Home Assistant](https://www.home-assistant.io/) 
 - Built-in domain defaults for lock, light, switch, cover, climate, media player, alarm, and more
 - Transitional state animations (e.g. locking/unlocking blink)
 - Secondary entity support (e.g. door sensor paired with a lock)
-- Custom state appearance overrides
-- Configurable tap, double-tap, and hold actions
+- Custom state appearance overrides — pick from the entity's known states (or `secondary:` prefix for the secondary entity) via a dropdown, with free-text fallback for template values
+- Configurable tap, double-tap, and hold actions via Home Assistant's native action editor
 - **Camera reveal** — slide cameras down from the button when a configured state is active, with sync slide animation, configurable aspect ratio, fit mode (cover/contain), and position per camera
-- Visual editor with native HTML controls that integrate cleanly with Home Assistant theming
+- Visual editor built on Home Assistant's `ha-form` schema — matches the look and feel of HA's built-in card editors
 
 ## Installation
 
@@ -41,7 +41,7 @@ A customisable button card for [Home Assistant](https://www.home-assistant.io/) 
 
 ### Visual Editor
 
-Add the card via the UI editor — all options are configurable through the visual editor with collapsible sections for Entity, Appearance, State Overrides, and Actions.
+Add the card via the UI editor. The editor uses Home Assistant's `ha-form` schema, so it inherits HA's native styling, lazy element loading, and accessibility behaviour. Layout: top-level Entity + Secondary Entity, collapsible **Appearance** and **Actions** sections, plus a **State Overrides** list where each override expands to its own form (state value as a dropdown, icon, label, color, blink toggle, and an optional camera reveal list).
 
 ### YAML
 
@@ -103,6 +103,82 @@ cards:
     entity: cover.blinds
 ```
 
+### Thermostat With Numeric Thresholds
+
+Numeric comparison operators light up the right color band. **Order matters** — the highest-specificity bucket comes first, otherwise a 75°F reading would match `> 65` before reaching `> 75`:
+
+```yaml
+type: custom:status-button-card
+entity: sensor.living_room_temperature
+name: Living Room
+state_appearances:
+  - state: ">= 80"
+    color: "rgba(244, 67, 54, 1)"   # red
+    label: HOT
+    icon: mdi:thermometer-high
+  - state: ">= 75"
+    color: "rgba(255, 170, 0, 1)"   # orange
+    label: WARM
+    icon: mdi:thermometer
+  - state: ">= 65"
+    color: "rgba(46, 175, 80, 0.9)" # green
+    label: COMFY
+    icon: mdi:thermometer
+  - state: "< 65"
+    color: "rgba(33, 150, 243, 1)"  # blue
+    label: COLD
+    icon: mdi:snowflake
+  - state: "!= unavailable"          # numeric ops won't match unavailable; this is a safety net
+    icon: mdi:help-circle-outline
+```
+
+### Alarm Panel With Regex
+
+A single regex collapses every `armed_*` state into one rule. The bare `disarmed` and `triggered` fall through to their own rules:
+
+```yaml
+type: custom:status-button-card
+entity: alarm_control_panel.home
+state_appearances:
+  - state: triggered
+    color: "rgba(244, 67, 54, 1)"
+    label: TRIGGERED
+    animate: true
+  - state: "~= ^armed"               # armed_home, armed_away, armed_night, armed_vacation, armed_custom_bypass
+    color: "rgba(46, 175, 80, 0.9)"
+    icon: mdi:shield-check
+    label: ARMED
+  - state: "~= ^(arming|pending|disarming)"
+    color: "rgba(255, 170, 0, 1)"
+    animate: true
+  - state: disarmed
+    color: "rgba(244, 67, 54, 1)"
+    label: DISARMED
+    icon: mdi:shield-off
+```
+
+### Camera On Motion (Secondary Entity)
+
+Lock paired with a motion sensor. The lock's appearance follows its primary state; the camera reveals when the **secondary** motion sensor fires, regardless of lock state:
+
+```yaml
+type: custom:status-button-card
+entity: lock.front_door
+secondary_entity: binary_sensor.porch_motion
+state_appearances:
+  - state: "secondary:on"            # motion detected
+    cameras:
+      - entity: camera.porch
+        aspect_ratio: 16/9
+        object_fit: cover
+  - state: locked
+    icon: mdi:lock
+    color: "rgba(46, 175, 80, 0.9)"
+  - state: unlocked
+    icon: mdi:lock-open
+    color: "rgba(244, 67, 54, 1)"
+```
+
 ## Configuration
 
 | Option | Type | Default | Description |
@@ -129,12 +205,49 @@ cards:
 
 | Option | Type | Description |
 |---|---|---|
-| `state` | string | State value to match. Prefix with `secondary:` for secondary entity |
+| `state` | string | Pattern to match the entity's state (see [State Patterns](#state-patterns)). Prefix with `secondary:` to match against the secondary entity |
 | `icon` | string | Icon override for this state |
 | `label` | string | Label override for this state |
 | `color` | string | Color override for this state |
 | `animate` | boolean | Enable blink animation for this state |
 | `cameras` | list | Cameras to reveal when this state is active (see Camera Reveal) |
+
+### State Patterns
+
+The `state` field accepts comparison operators in addition to exact matches. Useful for sensors with numeric values, "anything but unavailable" guards, or regex matches across whole state families:
+
+| Pattern | Matches |
+|---|---|
+| `locked` | exact string match (default when no operator is given) |
+| `= idle` | explicit equals — same as bare `idle` |
+| `!= unavailable` | not equal |
+| `> 2`, `>2` | numeric greater-than (entity state coerced via `Number()`) |
+| `>= 2` | numeric greater-or-equal |
+| `< 100`, `<= 50` | numeric less-than / less-or-equal |
+| `~= ^armed` | regex test against the state string |
+| `secondary:>50` | any operator works with the `secondary:` prefix |
+
+> [!IMPORTANT]
+> **Order is priority.** Rules are evaluated top-to-bottom and the **first one that matches wins** — all subsequent rules are ignored for that state. List more-specific patterns above broader ones.
+>
+> For example, to color a sensor amber when above 30 and red when above 60, the `> 60` rule must come **before** the `> 30` rule. If you put `> 30` first, a state of `75` matches it and you'll see amber, never red.
+>
+> In the visual editor, **drag the grip handle** on the left of each row to reorder. In YAML, the list order is the priority order.
+
+Other notes:
+- Numeric operators against non-numeric states (`unavailable`, `unknown`, `on`) never match — they fall through to the next rule.
+- An invalid regex returns false rather than throwing — the rule simply doesn't match.
+
+```yaml
+state_appearances:
+  - state: "!= unavailable"          # primary entity reachable
+    icon: mdi:thermometer
+  - state: "> 30"                    # hot
+    color: rgba(244, 67, 54, 1)
+    label: "HOT"
+  - state: "~= ^armed"               # any armed_* state
+    icon: mdi:shield-check
+```
 
 ### Camera Reveal
 
@@ -195,6 +308,21 @@ npm run test:watch  # Watch mode
 npm run lint        # ESLint
 npm run format      # Prettier
 ```
+
+### Local deploy to Home Assistant
+
+If you mount your HA config at `/Volumes/config` (e.g. via SMB), `npm run push` builds, deploys, and busts every cache layer:
+
+```bash
+npm run deploy   # build + copy to /Volumes/config/www/community/status-button-card/
+npm run dev      # rollup watch + auto-deploy on every save
+npm run bump     # point the Lovelace resource at the freshly hashed filename
+npm run push     # deploy && bump in one go
+```
+
+The deploy emits **two** files: the canonical `status-button-card.js` (which HACS validates against) and a content-hashed `status-button-card.<hash>.js`. The bump script reads `dist/.deploy-hash` and points the Lovelace resource URL at the hashed filename, so every build produces a brand-new URL that no browser cache, HA service worker, or Lovelace resource list can serve stale. Old hashed siblings are pruned on each deploy.
+
+`bump-resource.py` reads `HA_URL` and `HA_TOKEN` from `<repo>/../.env`. Override the resource match with `--name foo` or `RESOURCE_NAME=foo`. If `dist/.deploy-hash` is absent, it falls back to bumping a `?hacstag=` query.
 
 ## License
 

@@ -11,6 +11,7 @@ import {
   validateConfig,
   normalizeCameras,
   getCamerasForState,
+  stateMatchesPattern,
 } from "../src/state";
 import {
   COLOR_GREEN,
@@ -469,5 +470,149 @@ describe("getCamerasForState", () => {
     const entity = makeEntity("lock.door", "locked");
     const secondary = makeEntity("binary_sensor.motion", "on");
     expect(getCamerasForState(config, entity, secondary)).toEqual([{ entity: "camera.porch" }]);
+  });
+});
+
+describe("stateMatchesPattern", () => {
+  describe("exact match (no operator)", () => {
+    it("matches the same string", () => {
+      expect(stateMatchesPattern("locked", "locked")).toBe(true);
+    });
+    it("does not match a different string", () => {
+      expect(stateMatchesPattern("locked", "unlocked")).toBe(false);
+    });
+    it("trims surrounding whitespace from the pattern", () => {
+      expect(stateMatchesPattern("  on  ", "on")).toBe(true);
+    });
+    it("is case-sensitive", () => {
+      expect(stateMatchesPattern("ON", "on")).toBe(false);
+    });
+  });
+
+  describe("explicit equality (= and !=)", () => {
+    it("= matches", () => {
+      expect(stateMatchesPattern("= idle", "idle")).toBe(true);
+      expect(stateMatchesPattern("=idle", "idle")).toBe(true);
+    });
+    it("!= matches when different", () => {
+      expect(stateMatchesPattern("!= unavailable", "on")).toBe(true);
+    });
+    it("!= rejects when equal", () => {
+      expect(stateMatchesPattern("!= unavailable", "unavailable")).toBe(false);
+    });
+  });
+
+  describe("numeric comparisons", () => {
+    it(">2 matches 3", () => {
+      expect(stateMatchesPattern(">2", "3")).toBe(true);
+    });
+    it("> 2 matches 3 (with space)", () => {
+      expect(stateMatchesPattern("> 2", "3")).toBe(true);
+    });
+    it(">2 does not match 2", () => {
+      expect(stateMatchesPattern(">2", "2")).toBe(false);
+    });
+    it(">=2 matches 2", () => {
+      expect(stateMatchesPattern(">=2", "2")).toBe(true);
+    });
+    it(">=2 matches 2.5", () => {
+      expect(stateMatchesPattern(">=2", "2.5")).toBe(true);
+    });
+    it("<100 matches 21.5 (decimal state)", () => {
+      expect(stateMatchesPattern("<100", "21.5")).toBe(true);
+    });
+    it("<= 50 matches 50", () => {
+      expect(stateMatchesPattern("<= 50", "50")).toBe(true);
+    });
+    it("<= 50 rejects 50.1", () => {
+      expect(stateMatchesPattern("<= 50", "50.1")).toBe(false);
+    });
+    it("rejects non-numeric state for numeric comparator", () => {
+      expect(stateMatchesPattern(">2", "unavailable")).toBe(false);
+      expect(stateMatchesPattern(">2", "on")).toBe(false);
+    });
+    it("rejects non-numeric rhs", () => {
+      expect(stateMatchesPattern("> abc", "3")).toBe(false);
+    });
+    it("handles negative numbers", () => {
+      expect(stateMatchesPattern(">-5", "-3")).toBe(true);
+      expect(stateMatchesPattern("<-5", "-10")).toBe(true);
+    });
+  });
+
+  describe("regex (~=)", () => {
+    it("matches when the regex matches", () => {
+      expect(stateMatchesPattern("~= ^temp_.*", "temp_high")).toBe(true);
+    });
+    it("rejects when the regex does not match", () => {
+      expect(stateMatchesPattern("~= ^temp_.*", "humidity_high")).toBe(false);
+    });
+    it("invalid regex returns false rather than throwing", () => {
+      expect(stateMatchesPattern("~= [", "anything")).toBe(false);
+    });
+  });
+});
+
+describe("findAppearance — pattern operators", () => {
+  it("primary entity numeric > matches a sensor reading", () => {
+    const list: StateAppearance[] = [
+      { state: ">100", icon: "mdi:thermometer-high" },
+      { state: ">50", icon: "mdi:thermometer" },
+    ];
+    expect(findAppearance(list, "150")?.icon).toBe("mdi:thermometer-high");
+    expect(findAppearance(list, "60")?.icon).toBe("mdi:thermometer");
+    expect(findAppearance(list, "10")).toBeUndefined();
+  });
+
+  it("respects declaration order (first match wins)", () => {
+    const list: StateAppearance[] = [
+      { state: ">2", label: "big" },
+      { state: ">10", label: "huge" },
+    ];
+    // 15 satisfies both, but declaration order means ">2" wins.
+    expect(findAppearance(list, "15")?.label).toBe("big");
+  });
+
+  it("falls back from numeric rule on non-numeric state", () => {
+    const list: StateAppearance[] = [
+      { state: ">2", label: "numeric" },
+      { state: "unavailable", label: "down" },
+    ];
+    expect(findAppearance(list, "unavailable")?.label).toBe("down");
+  });
+
+  it("secondary patterns work with comparison operators", () => {
+    const list: StateAppearance[] = [
+      { state: "secondary:>50", label: "high" },
+      { state: "locked", label: "locked" },
+    ];
+    expect(findAppearance(list, "unlocked", "75")?.label).toBe("high");
+    expect(findAppearance(list, "locked", "75")?.label).toBe("locked"); // primary wins
+  });
+
+  it("!= operator at the top of the list matches non-matching primary", () => {
+    const list: StateAppearance[] = [{ state: "!= unavailable", label: "ok" }];
+    expect(findAppearance(list, "on")?.label).toBe("ok");
+    expect(findAppearance(list, "unavailable")).toBeUndefined();
+  });
+
+  it("regex pattern on primary", () => {
+    const list: StateAppearance[] = [
+      { state: "~= ^armed", icon: "mdi:shield-check" },
+      { state: "disarmed", icon: "mdi:shield-off" },
+    ];
+    expect(findAppearance(list, "armed_home")?.icon).toBe("mdi:shield-check");
+    expect(findAppearance(list, "armed_away")?.icon).toBe("mdi:shield-check");
+    expect(findAppearance(list, "disarmed")?.icon).toBe("mdi:shield-off");
+  });
+
+  it("preserves the original exact-match semantics", () => {
+    const list: StateAppearance[] = [
+      { state: "locked", label: "locked" },
+      { state: "unlocked", label: "unlocked" },
+    ];
+    expect(findAppearance(list, "locked")?.label).toBe("locked");
+    expect(findAppearance(list, "unlocked")?.label).toBe("unlocked");
+    expect(findAppearance(list, "jammed")).toBeUndefined();
   });
 });

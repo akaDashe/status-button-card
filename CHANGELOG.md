@@ -1,5 +1,47 @@
 # Changelog
 
+## 1.0.0-beta.3
+
+### Editor rewrite (canonical HA patterns)
+
+- **Editor rebuilt on `ha-form`** — the visual editor now uses Home Assistant's official card-editor pattern (JSON schema + `ha-form` + selectors) instead of hand-rolled widgets. This:
+  - Matches the look of HA's built-in card editors exactly (filled text fields, themed dropdowns, native action editor).
+  - Lazy-loads the lookup pickers HA uses internally — `ha-textfield`, `ha-entity-picker`, `ha-icon-picker`, etc. — through HA's own loaders.
+  - Picks up new HA editor features (theme tweaks, accessibility improvements) automatically as HA upgrades.
+- **Actions use HA's `ui_action` selector** — full native action picker (more-info, navigate, toggle, call-service, perform-action, URL, none) with service/target pickers. Double-tap and hold tucked under an "Add interactions" expander to match tile-card UX.
+
+### State Overrides upgrades
+
+- **Pattern operators** — the `state` field accepts more than exact matches:
+  - `locked` → exact match (unchanged default)
+  - `= idle` → explicit equals
+  - `!= unavailable` → not equal
+  - `> 2`, `>= 2`, `< 100`, `<= 50` → numeric comparison (entity state coerced via `Number()`; non-numeric states never match a numeric operator and fall through to the next rule)
+  - `~= ^armed` → regex test (invalid regexes return false rather than throwing)
+  - All operators compose with the `secondary:` prefix (e.g. `secondary:> 50`)
+- **State value dropdown** — pick from the configured entity's known states, plus the secondary entity's states surfaced as `secondary: <state>` entries. Free-text entry still works (`custom_value: true`) for template-style values and unusual integrations.
+- **Drag-to-reorder** — each row has a grip handle on the left. Drag it to reorder. A blue indicator line shows where the row will land.
+- **Order = priority, surfaced everywhere** — rules are evaluated top-to-bottom and **first match wins**. The editor hint, drag-handle tooltip, and the README's State Patterns callout all reinforce this so users put more-specific patterns above broader ones.
+
+### Fixes
+
+- `show_name` and `show_label` toggles now display in the **on** state by default, matching runtime behaviour where unset = enabled. Unchanged-from-default values are pruned from YAML so configs stay minimal.
+- "Add camera" and "Add state override" render as outlined `<ha-button>` controls instead of text-only fallbacks.
+
+### Dev tooling
+
+- **Content-hashed deploy pipeline** — `npm run push` now writes both `status-button-card.js` (canonical, for HACS) and `status-button-card.<hash>.js` (content-hashed). The Lovelace resource URL points at the hashed filename, which is a brand-new URL on every change — no browser cache, HA service worker, or Lovelace resource-list staleness possible. Old hashed siblings are pruned per deploy.
+- `bump-resource.py` reads `dist/.deploy-hash` and rewrites the resource URL accordingly, falling back to a `?hacstag=` query if no hash is present.
+- Editor helpers (`statesForEntity`, `buildStateOptions`, `colorToFormValue`/`FromFormValue`, `reorderList`, `stateMatchesPattern`, `DOMAIN_KNOWN_STATES`) extracted to `src/editor-helpers.ts` (or kept in `src/state.ts` for matchers) with **58 new unit tests** (test count 77 → 135).
+
+### Docs
+
+- README has a new "State Patterns" section with the full operator table, a prominent **order = priority** callout, and three worked examples:
+  - **Thermostat with numeric thresholds** — multi-level color bands ordered hottest-first.
+  - **Alarm panel with regex** — collapse every `armed_*` state into one rule.
+  - **Camera on motion (secondary entity)** — reveal a camera when the secondary motion sensor fires.
+- README "Local deploy to Home Assistant" subsection documents the hashed-filename pipeline (`deploy`/`dev`/`bump`/`push`).
+
 ## 1.0.0-beta.2
 
 ### Features

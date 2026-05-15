@@ -32,6 +32,51 @@ export function getStateCategory(entity: HassEntity): "active" | "inactive" | "t
   return "active";
 }
 
+/**
+ * State-override matcher. Supports:
+ *
+ *   "locked"      → exact string match (default when no operator)
+ *   ">2", "> 2"   → numeric greater-than (entity state coerced via Number())
+ *   ">= 2"        → numeric greater-or-equal
+ *   "< 2"         → numeric less-than
+ *   "<= 2"        → numeric less-or-equal
+ *   "!= foo"      → not equal (string)
+ *   "= foo"       → explicit equals (same as bare "foo")
+ *   "~= regex"    → regex test against the state string
+ *
+ * For numeric operators, if either side coerces to NaN the rule does not
+ * match — so `> 2` against `unavailable` is false, not "true because NaN
+ * comparisons throw". Invalid regexes return false rather than throwing.
+ */
+export function stateMatchesPattern(pattern: string, value: string): boolean {
+  if (pattern === undefined || pattern === null) return false;
+  const trimmed = pattern.trim();
+
+  // Order matters — two-char ops must be tried before single-char.
+  const ops = [">=", "<=", "!=", "~=", ">", "<", "="] as const;
+  for (const op of ops) {
+    if (!trimmed.startsWith(op)) continue;
+    const rhs = trimmed.slice(op.length).trim();
+    if (op === "=") return value === rhs;
+    if (op === "!=") return value !== rhs;
+    if (op === "~=") {
+      try {
+        return new RegExp(rhs).test(value);
+      } catch (_) {
+        return false;
+      }
+    }
+    const lhs = Number(value);
+    const rhsNum = Number(rhs);
+    if (Number.isNaN(lhs) || Number.isNaN(rhsNum)) return false;
+    if (op === ">=") return lhs >= rhsNum;
+    if (op === "<=") return lhs <= rhsNum;
+    if (op === ">") return lhs > rhsNum;
+    if (op === "<") return lhs < rhsNum;
+  }
+  return value === trimmed;
+}
+
 export function findAppearance(
   appearances: StateAppearance[] | undefined,
   entityState: string,
@@ -39,12 +84,20 @@ export function findAppearance(
 ): StateAppearance | undefined {
   if (!appearances?.length) return undefined;
 
-  let match = appearances.find((a) => a.state === entityState);
-  if (match) return match;
+  // Two passes: primary-entity rules first (in declaration order so the
+  // user can order by specificity), then secondary-entity rules. Within
+  // each pass we use pattern matching so comparison operators work.
+  for (const a of appearances) {
+    if (!a.state || a.state.startsWith("secondary:")) continue;
+    if (stateMatchesPattern(a.state, entityState)) return a;
+  }
 
-  if (secondaryState) {
-    match = appearances.find((a) => a.state === `secondary:${secondaryState}`);
-    if (match) return match;
+  if (secondaryState !== undefined) {
+    for (const a of appearances) {
+      if (!a.state || !a.state.startsWith("secondary:")) continue;
+      const inner = a.state.slice("secondary:".length);
+      if (stateMatchesPattern(inner, secondaryState)) return a;
+    }
   }
 
   return undefined;

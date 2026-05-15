@@ -8,3 +8,7 @@ coverage/
 
 # TypeScript declarations emitted alongside the bundle aren't needed for HACS.
 dist/src/
+
+# Local deploy artifact — content hash of the most recent build, consumed by
+# scripts/bump-resource.py. Regenerated on every `npm run deploy`.
+dist/.deploy-hash
